@@ -1,0 +1,82 @@
+@import url('https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+
+html,
+body {
+    font-family: 'PT Sans', sans-serif;
+    font-size: 14px;
+    margin: 0;
+    padding: 0;
+    background-color: #ffffff;
+    height: 100%;
+}
+
+header {
+    font-family: 'Bicubik', monospace;
+    background-color: rgb(51, 51, 51);
+    color: #ffffff;
+    padding: 6mm 0;
+    text-align: center;
+    width: 100%;
+    top: 0;
+}
+
+header h1,
+header h2 {
+    margin: 0;
+}
+
+nav {
+    background-color: #333333;
+    color: white;
+    padding: 10px 0;
+    display: flex;
+    font-weight: bold;
+    margin-bottom: 40px;
+}
+
+.nav-item {
+    margin: 0 10px;
+    flex: 1;
+    text-align: center;
+}
+
+.nav-item a {
+    font-family: 'Bicubik', monospace;
+    margin: 0 15px;
+    text-decoration: none;
+    color: #ffffff;
+}
+
+.nav-item a:hover {
+    color: #7fadff;
+}
+
+.nav-item a.active {
+    color: #7fadff;
+}
+
+.form-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.form-group {
+    margin-bottom: 10px;
+    width: 100%;
+}
+
+button {
+    width: 100%;
+    padding: 10px;
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: 8px;
+}
+
+button:hover {
+    background-color: #8c968c;
+}

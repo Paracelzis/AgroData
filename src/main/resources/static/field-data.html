@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Система хранения и анализа данных с полей</title>
+    <link rel="icon" href="img/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="css/style_field_data.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.css">
+    <script type="text/javascript" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script type="text/javascript" src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+</head>
+<body>
+<header>
+    <h1>Система хранения и анализа данных с полей</h1>
+    <h2>Просмотр данных с датчиков</h2>
+</header>
+<main>
+    <div id="nav-placeholder"></div>
+
+    <script>
+        $(function(){
+            $("#nav-placeholder").load("nav.html", function() {
+                highlightActiveNavItem();
+            });
+        });
+
+        function highlightActiveNavItem() {
+            var url = window.location.href.split('#')[0];
+            var links = document.querySelectorAll('.nav-item a');
+            links.forEach(function(link) {
+                if (link.href === url) {
+                    link.classList.add('active');
+                } else {
+                    link.classList.remove('active');
+                }
+            });
+        }
+    </script>
+
+    <div class="form-container">
+        <label for="field-select">Выберите поле:</label>
+        <select id="field-select" class="form-control"></select>
+        <button class="btn btn-primary mt-2" onclick="fetchFieldData()">Отобразить</button>
+    </div>
+
+    <div class="table-container">
+        <table id="field-data-table" class="display">
+            <thead>
+            <tr>
+                <th>Название датчика</th>
+                <th>Значение</th>
+                <th>Дата и время</th>
+                <th>Действия</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- Modal для редактирования записи -->
+    <div class="modal fade" id="editRecordModal" tabindex="-1" aria-labelledby="editRecordModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editRecordModalLabel">Редактировать запись</h5>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="edit-sensor-name">Название датчика</label>
+                        <input type="text" id="edit-sensor-name" class="form-control" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-value">Значение</label>
+                        <input type="number" id="edit-value" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-timestamp">Дата и время</label>
+                        <input type="datetime-local" id="edit-timestamp" class="form-control">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Закрыть</button>
+                    <button type="button" class="btn btn-primary" onclick="saveRecordChanges()">Сохранить изменения</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal для подтверждения удаления -->
+    <div class="modal fade" id="deleteRecordModal" tabindex="-1" aria-labelledby="deleteRecordModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteRecordModalLabel">Удалить запись</h5>
+                </div>
+                <div class="modal-body">
+                    Вы уверены, что хотите удалить эту запись?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-danger" onclick="deleteRecord()">Удалить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+<script>
+    let currentPage = 0;
+    let table;
+    let selectedRecordId = null;
+    let selectedFieldId = null;
+    let selectedSensorName = null;
+
+    $(document).ready(function() {
+        table = $('#field-data-table').DataTable({
+            language: {
+                "processing": "Подождите...",
+                "search": "Поиск:",
+                "lengthMenu": "Показать _MENU_ записей",
+                "info": "Записи с _START_ до _END_ из _TOTAL_ записей",
+                "infoEmpty": "Записи с 0 до 0 из 0 записей",
+                "infoFiltered": "(отфильтровано из _MAX_ записей)",
+                "loadingRecords": "Загрузка записей...",
+                "zeroRecords": "Записи отсутствуют.",
+                "emptyTable": "В таблице отсутствуют данные",
+                "paginate": {
+                    "first": "Первая",
+                    "previous": "Предыдущая",
+                    "next": "Следующая",
+                    "last": "Последняя"
+                },
+                "aria": {
+                    "sortAscending": ": активировать для сортировки столбца по возрастанию",
+                    "sortDescending": ": активировать для сортировки столбца по убыванию"
+                }
+            }
+        });
+
+        fetchFields(); // Загрузка полей при загрузке страницы
+    });
+
+    function fetchFields() {
+        fetch('/fields')
+            .then(response => response.json())
+            .then(data => {
+                // Сортировка полей по имени
+                data.sort((a, b) => a.fieldName.localeCompare(b.fieldName));
+
+                console.log('Fields fetched:', data); // Отладочная информация
+                const fieldSelect = document.getElementById('field-select');
+                fieldSelect.innerHTML = ''; // Очистка текущих опций
+                data.forEach(field => {
+                    const option = document.createElement('option');
+                    option.value = field.id; // Предполагается, что у поля есть уникальный id
+                    option.textContent = field.fieldName;
+                    fieldSelect.appendChild(option);
+                });
+
+                // Устанавливаем значение первого поля в выпадающем списке и отображаем его данные
+                if (data.length > 0) {
+                    fetchFieldData();
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching fields:', error);
+            });
+    }
+
+
+    function fetchFieldData() {
+        selectedFieldId = document.getElementById('field-select').value;
+        console.log('Fetching data for field ID:', selectedFieldId); // Отладочная информация
+
+        fetch(`/sensorData/field/${selectedFieldId}?page=${currentPage}&size=15`)
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Field data fetched:', data); // Отладочная информация
+                table.clear();
+                data.forEach(record => {
+                    table.row.add([
+                        record.sensorName,
+                        record.value,
+                        new Date(record.timestamp).toLocaleString(),
+                        `<button class="btn btn-warning btn-sm" onclick="showEditModal('${record.id}', '${record.sensorName}', ${record.value}, '${record.timestamp}')">Редактировать</button>
+                        <button class="btn btn-danger btn-sm" onclick="showDeleteModal('${record.id}')">Удалить</button>`
+                    ]);
+                });
+                table.draw();
+            })
+            .catch(error => {
+                console.error('Error fetching field data:', error);
+            });
+    }
+
+    function showEditModal(id, sensorName, value, timestamp) {
+        selectedRecordId = id;
+        selectedSensorName = sensorName;
+        document.getElementById('edit-sensor-name').value = sensorName;
+        document.getElementById('edit-value').value = value;
+        document.getElementById('edit-timestamp').value = new Date(timestamp).toISOString().slice(0, 16);
+        $('#editRecordModal').modal('show');
+    }
+
+    function saveRecordChanges() {
+        const value = document.getElementById('edit-value').value;
+        const timestamp = document.getElementById('edit-timestamp').value + ":00.000+00:00";
+
+        fetch(`/sensorData/${selectedRecordId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                fieldId: selectedFieldId,
+                sensorName: selectedSensorName,
+                value: value,
+                timestamp: timestamp
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Record updated:', data);
+            $('#editRecordModal').modal('hide');
+            fetchFieldData();
+        })
+        .catch(error => {
+            console.error('Error updating record:', error);
+        });
+    }
+
+    function showDeleteModal(id) {
+        selectedRecordId = id;
+        $('#deleteRecordModal').modal('show');
+    }
+
+    function deleteRecord() {
+        fetch(`/sensorData/${selectedRecordId}`, {
+            method: 'DELETE'
+        })
+        .then(() => {
+            $('#deleteRecordModal').modal('hide');
+            fetchFieldData();
+        })
+        .catch(error => {
+            console.error('Error deleting record:', error);
+        });
+    }
+</script>
+</body>
+</html>
