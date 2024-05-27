@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <title>Система хранения и анализа данных с полей</title>
-    <link rel="icon" href="img/favicon.ico" type="image/x-icon">
+    <link rel="icon" href="/img/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" type="text/css" href="css/style_add_sensor_data.css">
+    <link rel="stylesheet" type="text/css" href="/css/style_add_sensor_data.css">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
@@ -20,9 +20,10 @@
 
     <script>
         $(function(){
-            $("#nav-placeholder").load("nav.html", function() {
+            $("#nav-placeholder").load("/nav.html", function() {
                 highlightActiveNavItem();
             });
+            fetchFields();
         });
 
         function highlightActiveNavItem() {
@@ -36,8 +37,53 @@
                 }
             });
         }
+
+        function fetchFields() {
+            fetch('/fields')
+                .then(response => response.json())
+                .then(data => {
+                    const fieldSelect = document.getElementById('manual-field-name');
+                    fieldSelect.innerHTML = '';
+                    data.sort((a, b) => a.fieldName.localeCompare(b.fieldName)); // Сортировка полей по имени
+                    data.forEach(field => {
+                        const option = document.createElement('option');
+                        option.value = field.id;
+                        option.textContent = field.fieldName;
+                        fieldSelect.appendChild(option);
+                    });
+                    if (data.length > 0) {
+                        fetchSensors(data[0].id); // Fetch sensors for the first field
+                    }
+                })
+                .catch(error => console.error('Error fetching fields:', error));
+        }
+
+        function fetchSensors(fieldId) {
+            fetch(`/fields/${fieldId}`)
+                .then(response => response.json())
+                .then(field => {
+                    const sensorSelect = document.getElementById('manual-sensor-name');
+                    sensorSelect.innerHTML = '';
+                    field.sensors.sort((a, b) => a.sensorName.localeCompare(b.sensorName)); // Сортировка датчиков по имени
+                    field.sensors.forEach(sensor => {
+                        const option = document.createElement('option');
+                        option.value = sensor.sensorName;
+                        option.textContent = sensor.sensorName;
+                        sensorSelect.appendChild(option);
+                    });
+                })
+                .catch(error => console.error('Error fetching sensors:', error));
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('manual-field-name').addEventListener('change', function() {
+                const fieldId = this.value;
+                fetchSensors(fieldId);
+            });
+        });
     </script>
 
+    <!-- Для добавления новых данных -->
     <div class="form-container">
         <div class="form-group">
             <textarea id="sensor-data" class="form-control" rows="10" placeholder="Данные с датчиков в формате JSON"></textarea>
@@ -53,25 +99,28 @@
         <h2>Добавить данные вручную:</h2>
         <div class="form-group">
             <label for="manual-field-name">Название поля</label>
-            <input type="text" id="manual-field-name" class="form-control" placeholder="Название поля">
+            <select id="manual-field-name" class="form-control"></select>
         </div>
         <div class="form-group">
             <label for="manual-sensor-name">Название датчика</label>
-            <input type="text" id="manual-sensor-name" class="form-control" placeholder="Название датчика">
+            <select id="manual-sensor-name" class="form-control"></select>
         </div>
         <div class="form-group">
             <label for="manual-sensor-value">Значение</label>
             <input type="number" id="manual-sensor-value" class="form-control" placeholder="Значение">
         </div>
         <div class="form-group">
+            <label for="manual-sensor-unit">Единицы измерения</label>
+            <input type="text" id="manual-sensor-unit" class="form-control" placeholder="Единицы измерения">
+        </div>
+        <div class="form-group">
             <label for="manual-sensor-timestamp">Дата и время</label>
-            <input type="datetime-local" id="manual-sensor-timestamp" class="form-control">
+            <input type="datetime-local" id="manual-sensor-timestamp" class="form-control" placeholder="Дата и время">
         </div>
         <button class="btn btn-primary" onclick="addManualSensorData()">Добавить данные</button>
     </div>
 
     <br>
-
 </main>
 
 <script>
@@ -102,6 +151,13 @@
             return;
         }
 
+        for (let entry of data) {
+            if (!entry.unit || !entry.fieldId || !entry.sensorName || !entry.value || !entry.timestamp) {
+                alert('Все поля должны быть заполнены');
+                return;
+            }
+        }
+
         processAndUploadData(data);
     }
 
@@ -121,6 +177,13 @@
             } catch (e) {
                 alert('Некорректный формат JSON в файле: ' + e.message);
                 return;
+            }
+
+            for (let entry of data) {
+                if (!entry.unit || !entry.fieldId || !entry.sensorName || !entry.value || !entry.timestamp) {
+                    alert('Все поля должны быть заполнены');
+                    return;
+                }
             }
 
             processAndUploadData(data);
@@ -171,38 +234,39 @@
     }
 
     function addManualSensorData() {
-        const fieldName = document.getElementById('manual-field-name').value.trim();
+        const fieldId = document.getElementById('manual-field-name').value;
         const sensorName = document.getElementById('manual-sensor-name').value.trim();
         const value = document.getElementById('manual-sensor-value').value;
+        const unit = document.getElementById('manual-sensor-unit').value.trim();
         const timestamp = document.getElementById('manual-sensor-timestamp').value;
 
-        if (!fieldName || !sensorName || !value || !timestamp) {
+        if (!fieldId || !sensorName || !value || !unit || !timestamp) {
             alert('Все поля должны быть заполнены');
             return;
         }
 
-        fetchFieldIdByName(fieldName)
-            .then(fieldId => fetchFieldById(fieldId)
-                .then(field => {
-                    if (field.sensors.some(sensor => sensor.sensorName === sensorName)) {
-                        const data = [{
-                            fieldId: fieldId,
-                            sensorName: sensorName,
-                            value: value,
-                            timestamp: timestamp + ":00.000+00:00"
-                        }];
-                        return fetch('/sensorData', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify(data)
-                        });
-                    } else {
-                        throw new Error(`Датчик "${sensorName}" не найден в поле "${fieldName}"`);
-                    }
-                })
-            )
+        const data = [{
+            fieldId: fieldId,
+            sensorName: sensorName,
+            value: value,
+            unit: unit,
+            timestamp: timestamp
+        }];
+
+        fetchFieldById(fieldId)
+            .then(field => {
+                if (field.sensors.some(sensor => sensor.sensorName === sensorName)) {
+                    return fetch('/sensorData', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(data)
+                    });
+                } else {
+                    throw new Error(`Датчик "${sensorName}" не найден в поле "${field.fieldName}"`);
+                }
+            })
             .then(response => {
                 if (!response.ok) {
                     throw new Error('Ошибка сети при добавлении данных');

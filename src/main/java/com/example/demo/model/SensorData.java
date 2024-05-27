@@ -3,6 +3,7 @@ package com.example.demo.model;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+
 import java.util.Date;
 
 @Document(collection = "sensorData")
@@ -11,10 +12,8 @@ public class SensorData {
     private String id;
     private String fieldId;
     private String sensorName;
-
-    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSSXXX")
+    private String unit;
     private Date timestamp;
-
     private double value;
 
     // Getters and Setters
@@ -56,5 +55,13 @@ public class SensorData {
 
     public void setValue(double value) {
         this.value = value;
+    }
+
+    public String getUnit() {
+        return unit;
+    }
+
+    public void setUnit(String unit) {
+        this.unit = unit;
     }
 }

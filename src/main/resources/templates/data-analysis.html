@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Система хранения и анализа данных с полей</title>
+    <link rel="icon" href="/img/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/style_data_analysis.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.css">
+    <script type="text/javascript" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+    <script type="text/javascript" src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.10.4/dayjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dayjs@1.10.4/plugin/customParseFormat.js"></script>
+    <script>
+        dayjs.extend(window.dayjs_plugin_customParseFormat);
+    </script>
+    <style>
+        .btn-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .btn-container button {
+            width: 200px;
+        }
+
+        .form-container {
+            width: 40%;
+        }
+
+        .chart-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px auto;
+            width: 65%;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Система хранения и анализа данных с полей</h1>
+    <h2>Анализ и экспорт данных</h2>
+</header>
+<main>
+    <div id="nav-placeholder"></div>
+
+    <script>
+        let chart;
+
+        $(function(){
+            $("#nav-placeholder").load("/nav.html", function() {
+                highlightActiveNavItem();
+            });
+        });
+
+        function highlightActiveNavItem() {
+            var url = window.location.href.split('#')[0];
+            var links = document.querySelectorAll('.nav-item a');
+            links.forEach(function(link) {
+                if (link.href === url) {
+                    link.classList.add('active');
+                } else {
+                    link.classList.remove('active');
+                }
+            });
+        }
+
+        function fetchFields() {
+            fetch('/fields')
+                .then(response => response.json())
+                .then(data => {
+                    const fieldSelect = document.getElementById('field-select');
+                    fieldSelect.innerHTML = '';
+                    data.sort((a, b) => a.fieldName.localeCompare(b.fieldName));
+                    data.forEach(field => {
+                        const option = document.createElement('option');
+                        option.value = field.id;
+                        option.textContent = field.fieldName;
+                        fieldSelect.appendChild(option);
+                    });
+                    if (data.length > 0) {
+                        fetchSensors(data[0].id);
+                    }
+                })
+                .catch(error => console.error('Error fetching fields:', error));
+        }
+
+        function fetchSensors(fieldId) {
+            fetch(`/fields/${fieldId}`)
+                .then(response => response.json())
+                .then(field => {
+                    const sensorSelect = document.getElementById('sensor-select');
+                    sensorSelect.innerHTML = '';
+                    field.sensors.sort((a, b) => a.sensorName.localeCompare(b.sensorName));
+                    field.sensors.forEach(sensor => {
+                        const option = document.createElement('option');
+                        option.value = sensor.sensorName;
+                        option.textContent = sensor.sensorName;
+                        sensorSelect.appendChild(option);
+                    });
+                })
+                .catch(error => console.error('Error fetching sensors:', error));
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            fetchFields();
+            document.getElementById('field-select').addEventListener('change', function() {
+                const fieldId = this.value;
+                fetchSensors(fieldId);
+            });
+
+            document.getElementById('create-chart').addEventListener('click', function() {
+                const fieldId = document.getElementById('field-select').value;
+                const sensorName = document.getElementById('sensor-select').value;
+                const startDate = formatDate(document.getElementById('start-date').value);
+                const endDate = formatDate(document.getElementById('end-date').value);
+
+                if (!fieldId || !sensorName) {
+                    alert('Выберите поле и датчик.');
+                    return;
+                }
+
+                if (!startDate || !endDate) {
+                    alert('Выберите временной промежуток.');
+                    return;
+                }
+
+                fetchData(fieldId, sensorName, startDate, endDate);
+            });
+
+            document.getElementById('create-all-time-chart').addEventListener('click', function() {
+                const fieldId = document.getElementById('field-select').value;
+                const sensorName = document.getElementById('sensor-select').value;
+
+                if (!fieldId || !sensorName) {
+                    alert('Выберите поле и датчик.');
+                    return;
+                }
+
+                fetchAllData(fieldId, sensorName);
+            });
+
+            document.getElementById('export-data').addEventListener('click', function() {
+                const fieldId = document.getElementById('field-select').value;
+                const sensorName = document.getElementById('sensor-select').value;
+                const startDate = formatDate(document.getElementById('start-date').value);
+                const endDate = formatDate(document.getElementById('end-date').value);
+
+                if (!fieldId || !sensorName) {
+                    alert('Выберите поле и датчик.');
+                    return;
+                }
+
+                exportToWord(fieldId, sensorName, startDate, endDate);
+            });
+        });
+
+        function formatDate(dateStr) {
+            return dateStr.replace('T', ' ') + ':00';
+        }
+
+        function createChart(data) {
+            console.log('Creating chart with data:', data);
+
+            data.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+            const ctx = document.getElementById('chart').getContext('2d');
+            if (chart) {
+                chart.destroy();
+            }
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map(entry => entry.timestamp),  // Use timestamps as they are
+                    datasets: [{
+                        label: 'Значение датчика',
+                        data: data.map(entry => entry.value),
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1,
+                        fill: false
+                    }]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            type: 'category',  // Treat labels as categories
+                            title: {
+                                display: true,
+                                text: 'Дата'
+                            },
+                            ticks: {
+                                maxRotation: 45, // Angle in degrees
+                                minRotation: 45
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Значение'
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                title: function(tooltipItems) {
+                                    let dateStr = tooltipItems[0].label;
+                                    return dateStr;  // Return raw date string
+                                },
+                                label: function(context) {
+                                    const label = context.dataset.label || '';
+                                    return `${label}: ${context.raw}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function fetchData(fieldId, sensorName, startDate, endDate) {
+            fetch(`/sensorData/${fieldId}/${sensorName}?start=${startDate}&end=${endDate}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Data received:', data);
+                    if (data.length > 0) {
+                        createChart(data);
+                    } else {
+                        alert('Нет данных за выбранный период.');
+                    }
+                })
+                .catch(error => console.error('Error fetching data:', error));
+        }
+
+        function fetchAllData(fieldId, sensorName) {
+            fetch(`/sensorData/${fieldId}/${sensorName}/all`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Data received:', data);
+                    if (data.length > 0) {
+                        createChart(data);
+                    } else {
+                        alert('Нет данных для выбранного датчика.');
+                    }
+                })
+                .catch(error => console.error('Error fetching data:', error));
+        }
+
+    </script>
+
+    <div class="form-container">
+        <div class="form-group">
+            <label for="field-select">Выберите поле:</label>
+            <select id="field-select" class="form-control"></select>
+        </div>
+
+        <div class="form-group">
+            <label for="sensor-select">Выберите датчик:</label>
+            <select id="sensor-select" class="form-control"></select>
+        </div>
+
+        <div class="form-group">
+            <label for="start-date">Дата начала:</label>
+            <input type="datetime-local" id="start-date" class="form-control">
+        </div>
+
+        <div class="form-group">
+            <label for="end-date">Дата окончания:</label>
+            <input type="datetime-local" id="end-date" class="form-control">
+        </div>
+    </div>
+
+    <div class="btn-container">
+        <button id="create-chart" class="btn btn-primary">Создать график</button>
+        <button id="create-all-time-chart" class="btn btn-secondary">График за все время</button>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="chart" width="400" height="200"></canvas>
+    </div>
+
+    <br>
+</main>
+</body>
+</html>
