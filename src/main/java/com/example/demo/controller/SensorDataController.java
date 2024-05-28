@@ -75,15 +75,4 @@ public class SensorDataController {
         return sensorDataService.getAllTimeSensorData(fieldId, sensorName);
     }
 
-    @GetMapping("/export/{fieldId}/{sensorName}")
-    public ResponseEntity<byte[]> exportToWord(
-            @PathVariable String fieldId,
-            @PathVariable String sensorName,
-            @RequestParam(required = false) String start,
-            @RequestParam(required = false) String end) throws ParseException {
-        byte[] wordFile = sensorDataService.exportToWord(fieldId, sensorName, start, end);
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("Content-Disposition", "attachment; filename=sensor_data.docx");
-        return new ResponseEntity<>(wordFile, headers, HttpStatus.OK);
-    }
 }

@@ -51,19 +51,6 @@ public class SensorDataService {
         sensorDataRepository.deleteById(id);
     }
 
-    public byte[] exportToWord(String fieldId, String sensorName, String startDate, String endDate) throws ParseException {
-        List<SensorData> data;
-        if (startDate == null || endDate == null) {
-            data = getAllTimeSensorData(fieldId, sensorName);
-        } else {
-            data = getSensorData(fieldId, sensorName, startDate, endDate);
-        }
-
-        // Implement your logic to export data to Word document
-        // Return the byte array of the Word document
-        return new byte[0];
-    }
-
     public Page<SensorData> findByFieldIdOrderByTimestampDesc(String fieldId, Pageable pageable) {
         return sensorDataRepository.findByFieldIdOrderByTimestampDesc(fieldId, pageable);
     }
