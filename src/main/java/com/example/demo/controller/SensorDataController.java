@@ -5,24 +5,32 @@ import com.example.demo.service.SensorDataService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.text.ParseException;
 import java.util.List;
 import java.util.Optional;
 
+
 @RestController
 @RequestMapping("/sensorData")
 public class SensorDataController {
+
     @Autowired
     private SensorDataService sensorDataService;
 
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
+
     @PostMapping
     public List<SensorData> addSensorData(@RequestBody List<SensorData> sensorData) {
-        return sensorDataService.saveAll(sensorData);
+        List<SensorData> savedData = sensorDataService.saveAll(sensorData);
+        // Отправляем обновления через WebSocket
+        savedData.forEach(data -> messagingTemplate.convertAndSend("/topic/field-data/" + data.getFieldId(), data));
+        return savedData;
     }
 
     @GetMapping("/field/{fieldId}")
@@ -44,16 +52,29 @@ public class SensorDataController {
         if (!sensorDataService.existsById(id)) {
             return ResponseEntity.notFound().build();
         }
+
         sensorData.setId(id);
         SensorData updatedSensorData = sensorDataService.save(sensorData);
+
+        // Отправляем обновление через WebSocket
+        messagingTemplate.convertAndSend("/topic/field-data/" + updatedSensorData.getFieldId(), updatedSensorData);
+
         return ResponseEntity.ok(updatedSensorData);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteSensorData(@PathVariable String id) {
         try {
-            sensorDataService.deleteById(id);
-            return ResponseEntity.ok().build();
+            Optional<SensorData> sensorData = sensorDataService.findById(id);
+            if (sensorData.isPresent()) {
+                sensorDataService.deleteById(id);
+                // Отправляем уведомление об удалении через WebSocket
+                messagingTemplate.convertAndSend("/topic/field-data/" + sensorData.get().getFieldId(),
+                        new DeleteMessage(id));
+                return ResponseEntity.ok().build();
+            } else {
+                return ResponseEntity.notFound().build();
+            }
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
@@ -75,4 +96,21 @@ public class SensorDataController {
         return sensorDataService.getAllTimeSensorData(fieldId, sensorName);
     }
 
+    // Класс для сообщения об удалении
+    private static class DeleteMessage {
+        private String type = "DELETE";
+        private String id;
+
+        public DeleteMessage(String id) {
+            this.id = id;
+        }
+
+        public String getType() {
+            return type;
+        }
+
+        public String getId() {
+            return id;
+        }
+    }
 }

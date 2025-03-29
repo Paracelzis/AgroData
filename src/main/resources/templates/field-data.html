@@ -11,13 +11,16 @@
     <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
     <script type="text/javascript" src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-
+    <!-- Добавляем библиотеки SockJS и STOMP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.0/sockjs.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
 </head>
 <body>
 <header>
     <h1>Система хранения и анализа данных с полей</h1>
     <h2>Просмотр данных с датчиков</h2>
 </header>
+
 <main>
     <div id="nav-placeholder"></div>
 
@@ -112,7 +115,6 @@
             </div>
         </div>
     </div>
-
 </main>
 
 <script>
@@ -122,6 +124,8 @@
     let selectedFieldId = null;
     let selectedSensorName = null;
     let selectedUnit = null;
+    let stompClient = null;
+    let currentSubscription = null; // Храним текущую подписку
 
     $(document).ready(function() {
         table = $('#field-data-table').DataTable({
@@ -145,11 +149,90 @@
                     "sortAscending": ": активировать для сортировки столбца по возрастанию",
                     "sortDescending": ": активировать для сортировки столбца по убыванию"
                 }
-            }
+            },
+            columnDefs: [
+                {
+                    targets: 3, // Столбец с датой
+                    type: 'date', // Указываем тип данных
+                    render: function(data, type, row) {
+                        if (type === 'sort') {
+                            // Для сортировки возвращаем timestamp в формате ISO
+                            return data.originalTimestamp;
+                        }
+                        // Для отображения возвращаем отформатированную дату
+                        return data.display;
+                    }
+                }
+            ]
         });
 
-        fetchFields(); // Загрузка полей при загрузке страницы
+        fetchFields();
+        connectWebSocket();
     });
+
+    function connectWebSocket() {
+        const socket = new SockJS('/ws');
+        stompClient = Stomp.over(socket);
+
+        stompClient.connect({}, function(frame) {
+            console.log('Connected to WebSocket: ' + frame);
+            // Подписываемся на обновления, если поле уже выбрано
+            if (selectedFieldId) {
+                subscribeToFieldUpdates(selectedFieldId);
+            }
+        }, function(error) {
+            console.error('WebSocket connection error: ', error);
+            // Попробуем переподключиться через 5 секунд
+            setTimeout(connectWebSocket, 5000);
+        });
+    }
+
+    function subscribeToFieldUpdates(fieldId) {
+        if (stompClient && stompClient.connected) {
+            if (currentSubscription) {
+                currentSubscription.unsubscribe();
+                currentSubscription = null;
+            }
+            currentSubscription = stompClient.subscribe(`/topic/field-data/${fieldId}`, function(message) {
+                const data = JSON.parse(message.body);
+                if (data.fieldId === selectedFieldId) {
+                    if (data.type === "DELETE") {
+                        table.rows().every(function() {
+                            const rowData = this.data();
+                            if (rowData[4].includes(data.id)) {
+                                this.remove();
+                            }
+                        });
+                        table.draw();
+                    } else {
+                        let exists = false;
+                        table.rows().every(function() {
+                            const rowData = this.data();
+                            if (rowData[4].includes(data.id)) {
+                                exists = true;
+                                return false;
+                            }
+                        });
+                        if (!exists) {
+                            const formattedDate = formatDate(data.timestamp);
+                            table.row.add([
+                                data.sensorName,
+                                data.value,
+                                data.unit,
+                                {
+                                    display: formattedDate,
+                                    originalTimestamp: data.timestamp
+                                },
+                                `<button class="btn btn-warning btn-sm" onclick="showEditModal('${data.id}', '${data.sensorName}', ${data.value}, '${data.timestamp}', '${data.unit}')">Редактировать</button>
+                                 <button class="btn btn-danger btn-sm" onclick="showDeleteModal('${data.id}')">Удалить</button>`
+                            ]).draw();
+                            table.order([3, 'desc']).draw();
+                        }
+                    }
+                }
+            });
+        }
+    }
 
     function fetchFields() {
         fetch('/fields')
@@ -157,19 +240,21 @@
             .then(data => {
                 // Сортировка полей по имени
                 data.sort((a, b) => a.fieldName.localeCompare(b.fieldName));
-
                 console.log('Fields fetched:', data); // Отладочная информация
+
                 const fieldSelect = document.getElementById('field-select');
                 fieldSelect.innerHTML = ''; // Очистка текущих опций
+
                 data.forEach(field => {
                     const option = document.createElement('option');
-                    option.value = field.id; // Предполагается, что у поля есть уникальный id
+                    option.value = field.id;
                     option.textContent = field.fieldName;
                     fieldSelect.appendChild(option);
                 });
 
                 // Устанавливаем значение первого поля в выпадающем списке и отображаем его данные
                 if (data.length > 0) {
+                    selectedFieldId = fieldSelect.value;
                     fetchFieldData();
                 }
             })
@@ -180,37 +265,34 @@
 
     function fetchFieldData() {
         selectedFieldId = document.getElementById('field-select').value;
-        console.log('Fetching data for field ID:', selectedFieldId); // Отладочная информация
-
-        fetch(`/sensorData/field/${selectedFieldId}?page=${currentPage}&size=15`)
-            .then(response => {
-                console.log('Response status:', response.status);
-                return response.json();
-            })
+        fetch(`/sensorData/field/${selectedFieldId}?page=${currentPage}&size=100`)
+            .then(response => response.json())
             .then(data => {
-                console.log('Field data fetched:', data); // Отладочная информация
                 table.clear();
                 data.forEach(record => {
+                    const formattedDate = formatDate(record.timestamp);
                     table.row.add([
                         record.sensorName,
                         record.value,
                         record.unit,
-                        formatDate(record.timestamp),
+                        {
+                            display: formattedDate,
+                            originalTimestamp: record.timestamp // Сохраняем оригинальный timestamp для сортировки
+                        },
                         `<button class="btn btn-warning btn-sm" onclick="showEditModal('${record.id}', '${record.sensorName}', ${record.value}, '${record.timestamp}', '${record.unit}')">Редактировать</button>
-                        <button class="btn btn-danger btn-sm" onclick="showDeleteModal('${record.id}')">Удалить</button>`
+                         <button class="btn btn-danger btn-sm" onclick="showDeleteModal('${record.id}')">Удалить</button>`
                     ]);
                 });
-                table.draw();
+                table.order([3, 'desc']).draw();
+                subscribeToFieldUpdates(selectedFieldId);
             })
-            .catch(error => {
-                console.error('Error fetching field data:', error);
-            });
+            .catch(error => console.error('Error fetching field data:', error));
     }
 
     function formatDate(timestamp) {
         const date = new Date(timestamp);
-        const formattedDate = date.toISOString().slice(0, 10);
-        const formattedTime = date.toISOString().slice(11, 19);
+        const formattedDate = date.toISOString().slice(0, 10); // 2025-03-28
+        const formattedTime = date.toISOString().slice(11, 23); // 12:34:56.123
         return `${formattedDate} ${formattedTime}`;
     }
 
@@ -218,10 +300,12 @@
         selectedRecordId = id;
         selectedSensorName = sensorName;
         selectedUnit = unit;
+
         document.getElementById('edit-sensor-name').value = sensorName;
         document.getElementById('edit-value').value = value;
         document.getElementById('edit-timestamp').value = timestamp.slice(0, 16); // Берем только дату и время
         document.getElementById('edit-unit').value = unit;
+
         $('#editRecordModal').modal('show');
     }
 

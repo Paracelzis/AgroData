@@ -13,6 +13,8 @@ public class SensorData {
     private String fieldId;
     private String sensorName;
     private String unit;
+
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
     private Date timestamp;
     private double value;
 
