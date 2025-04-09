@@ -59,13 +59,20 @@ public class MqttConfig {
                 String payload = new String(message.getPayload());
                 logger.info("Received message on topic {}: {}", topic, payload);
 
-                // Парсим JSON
                 ObjectMapper mapper = new ObjectMapper();
                 SensorData sensorData = mapper.readValue(payload, SensorData.class);
 
+                // Логируем новые поля, если они есть
+                if (sensorData.getAccuracyClass() != null) {
+                    logger.info("Accuracy class: {}", sensorData.getAccuracyClass());
+                }
+                if (sensorData.getExtraParams() != null) {
+                    logger.info("Extra parameters: {}", sensorData.getExtraParams());
+                }
+
                 // Проверяем обязательные поля
                 if (sensorData.getFieldId() == null || sensorData.getSensorName() == null || sensorData.getValue() == 0.0) {
-                    logger.warn("Invalid data: fieldId, sensorName, or value is missing");
+                    logger.warn("Invalid data: fieldId, sensorName, or value is missing in payload: {}", payload);
                     return;
                 }
 
@@ -96,6 +103,7 @@ public class MqttConfig {
                     SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'");
                     Date timestamp = dateFormat.parse(timestampStr);
                     sensorData.setTimestamp(timestamp);
+                    logger.info("Parsed timestamp: {}", timestamp);
                 }
 
                 // Проверяем, существует ли уже запись с таким fieldId, sensorName и timestamp
@@ -116,9 +124,10 @@ public class MqttConfig {
                 logger.info("Saved to MongoDB: {}", sensorData);
 
                 // Отправляем обновление через WebSocket всем подписанным клиентам
+                logger.info("Sending WebSocket update to /topic/field-data/{}", sensorData.getFieldId());
                 messagingTemplate.convertAndSend("/topic/field-data/" + sensorData.getFieldId(), sensorData);
             } catch (Exception e) {
-                logger.error("Error processing MQTT message", e);
+                logger.error("Error processing MQTT message: {}", e.getMessage(), e);
             }
         });
 

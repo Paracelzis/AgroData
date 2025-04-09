@@ -5,6 +5,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.util.Date;
+import java.util.Map;
 
 @Document(collection = "sensorData")
 public class SensorData {
@@ -13,12 +14,13 @@ public class SensorData {
     private String fieldId;
     private String sensorName;
     private String unit;
-
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
     private Date timestamp;
     private double value;
+    private String accuracyClass; // Например, "±0.5%" или "Class A"
+    private Map<String, Object> extraParams; // Необязательные дополнительные параметры
 
-    // Getters and Setters
+    // Геттеры и сеттеры
     public String getId() {
         return id;
     }
@@ -43,6 +45,14 @@ public class SensorData {
         this.sensorName = sensorName;
     }
 
+    public String getUnit() {
+        return unit;
+    }
+
+    public void setUnit(String unit) {
+        this.unit = unit;
+    }
+
     public Date getTimestamp() {
         return timestamp;
     }
@@ -59,11 +69,19 @@ public class SensorData {
         this.value = value;
     }
 
-    public String getUnit() {
-        return unit;
+    public String getAccuracyClass() {
+        return accuracyClass;
     }
 
-    public void setUnit(String unit) {
-        this.unit = unit;
+    public void setAccuracyClass(String accuracyClass) {
+        this.accuracyClass = accuracyClass;
+    }
+
+    public Map<String, Object> getExtraParams() {
+        return extraParams;
+    }
+
+    public void setExtraParams(Map<String, Object> extraParams) {
+        this.extraParams = extraParams;
     }
 }

@@ -7,13 +7,6 @@
     <link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" type="text/css" href="/css/style_field_data.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.css">
-    <script type="text/javascript" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
-    <script type="text/javascript" src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-    <!-- Добавляем библиотеки SockJS и STOMP -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.0/sockjs.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
 </head>
 <body>
 <header>
@@ -24,26 +17,6 @@
 <main>
     <div id="nav-placeholder"></div>
 
-    <script>
-        $(function(){
-            $("#nav-placeholder").load("/nav.html", function() {
-                highlightActiveNavItem();
-            });
-        });
-
-        function highlightActiveNavItem() {
-            var url = window.location.href.split('#')[0];
-            var links = document.querySelectorAll('.nav-item a');
-            links.forEach(function(link) {
-                if (link.href === url) {
-                    link.classList.add('active');
-                } else {
-                    link.classList.remove('active');
-                }
-            });
-        }
-    </script>
-
     <div class="form-container">
         <label for="field-select">Выберите поле:</label>
         <select id="field-select" class="form-control"></select>
@@ -51,12 +24,14 @@
     </div>
 
     <div class="table-container">
-        <table id="field-data-table" class="display">
+        <table id="field-data-table" class="table table-bordered">
             <thead>
             <tr>
                 <th>Название датчика</th>
                 <th>Значение</th>
                 <th>Единицы измерения</th>
+                <th>Класс точности</th>
+                <th>Доп. параметры</th>
                 <th>Дата и время</th>
                 <th>Действия</th>
             </tr>
@@ -84,6 +59,14 @@
                     <div class="form-group">
                         <label for="edit-unit">Единицы измерения</label>
                         <input type="text" id="edit-unit" class="form-control" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-accuracy-class">Класс точности</label>
+                        <input type="text" id="edit-accuracy-class" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-extra-params">Дополнительные параметры (JSON)</label>
+                        <textarea id="edit-extra-params" class="form-control" rows="3"></textarea>
                     </div>
                     <div class="form-group">
                         <label for="edit-timestamp">Дата и время</label>
@@ -117,244 +100,13 @@
     </div>
 </main>
 
-<script>
-    let currentPage = 0;
-    let table;
-    let selectedRecordId = null;
-    let selectedFieldId = null;
-    let selectedSensorName = null;
-    let selectedUnit = null;
-    let stompClient = null;
-    let currentSubscription = null; // Храним текущую подписку
-
-    $(document).ready(function() {
-        table = $('#field-data-table').DataTable({
-            language: {
-                "processing": "Подождите...",
-                "search": "Поиск:",
-                "lengthMenu": "Показать _MENU_ записей",
-                "info": "Записи с _START_ до _END_ из _TOTAL_ записей",
-                "infoEmpty": "Записи с 0 до 0 из 0 записей",
-                "infoFiltered": "(отфильтровано из _MAX_ записей)",
-                "loadingRecords": "Загрузка записей...",
-                "zeroRecords": "Записи отсутствуют.",
-                "emptyTable": "В таблице отсутствуют данные",
-                "paginate": {
-                    "first": "Первая",
-                    "previous": "Предыдущая",
-                    "next": "Следующая",
-                    "last": "Последняя"
-                },
-                "aria": {
-                    "sortAscending": ": активировать для сортировки столбца по возрастанию",
-                    "sortDescending": ": активировать для сортировки столбца по убыванию"
-                }
-            },
-            columnDefs: [
-                {
-                    targets: 3, // Столбец с датой
-                    type: 'date', // Указываем тип данных
-                    render: function(data, type, row) {
-                        if (type === 'sort') {
-                            // Для сортировки возвращаем timestamp в формате ISO
-                            return data.originalTimestamp;
-                        }
-                        // Для отображения возвращаем отформатированную дату
-                        return data.display;
-                    }
-                }
-            ]
-        });
-
-        fetchFields();
-        connectWebSocket();
-    });
-
-    function connectWebSocket() {
-        const socket = new SockJS('/ws');
-        stompClient = Stomp.over(socket);
-
-        stompClient.connect({}, function(frame) {
-            console.log('Connected to WebSocket: ' + frame);
-            // Подписываемся на обновления, если поле уже выбрано
-            if (selectedFieldId) {
-                subscribeToFieldUpdates(selectedFieldId);
-            }
-        }, function(error) {
-            console.error('WebSocket connection error: ', error);
-            // Попробуем переподключиться через 5 секунд
-            setTimeout(connectWebSocket, 5000);
-        });
-    }
-
-    function subscribeToFieldUpdates(fieldId) {
-        if (stompClient && stompClient.connected) {
-            if (currentSubscription) {
-                currentSubscription.unsubscribe();
-                currentSubscription = null;
-            }
-            currentSubscription = stompClient.subscribe(`/topic/field-data/${fieldId}`, function(message) {
-                const data = JSON.parse(message.body);
-                if (data.fieldId === selectedFieldId) {
-                    if (data.type === "DELETE") {
-                        table.rows().every(function() {
-                            const rowData = this.data();
-                            if (rowData[4].includes(data.id)) {
-                                this.remove();
-                            }
-                        });
-                        table.draw();
-                    } else {
-                        let exists = false;
-                        table.rows().every(function() {
-                            const rowData = this.data();
-                            if (rowData[4].includes(data.id)) {
-                                exists = true;
-                                return false;
-                            }
-                        });
-                        if (!exists) {
-                            const formattedDate = formatDate(data.timestamp);
-                            table.row.add([
-                                data.sensorName,
-                                data.value,
-                                data.unit,
-                                {
-                                    display: formattedDate,
-                                    originalTimestamp: data.timestamp
-                                },
-                                `<button class="btn btn-warning btn-sm" onclick="showEditModal('${data.id}', '${data.sensorName}', ${data.value}, '${data.timestamp}', '${data.unit}')">Редактировать</button>
-                                 <button class="btn btn-danger btn-sm" onclick="showDeleteModal('${data.id}')">Удалить</button>`
-                            ]).draw();
-                            table.order([3, 'desc']).draw();
-                        }
-                    }
-                }
-            });
-        }
-    }
-
-    function fetchFields() {
-        fetch('/fields')
-            .then(response => response.json())
-            .then(data => {
-                // Сортировка полей по имени
-                data.sort((a, b) => a.fieldName.localeCompare(b.fieldName));
-                console.log('Fields fetched:', data); // Отладочная информация
-
-                const fieldSelect = document.getElementById('field-select');
-                fieldSelect.innerHTML = ''; // Очистка текущих опций
-
-                data.forEach(field => {
-                    const option = document.createElement('option');
-                    option.value = field.id;
-                    option.textContent = field.fieldName;
-                    fieldSelect.appendChild(option);
-                });
-
-                // Устанавливаем значение первого поля в выпадающем списке и отображаем его данные
-                if (data.length > 0) {
-                    selectedFieldId = fieldSelect.value;
-                    fetchFieldData();
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching fields:', error);
-            });
-    }
-
-    function fetchFieldData() {
-        selectedFieldId = document.getElementById('field-select').value;
-        fetch(`/sensorData/field/${selectedFieldId}?page=${currentPage}&size=100`)
-            .then(response => response.json())
-            .then(data => {
-                table.clear();
-                data.forEach(record => {
-                    const formattedDate = formatDate(record.timestamp);
-                    table.row.add([
-                        record.sensorName,
-                        record.value,
-                        record.unit,
-                        {
-                            display: formattedDate,
-                            originalTimestamp: record.timestamp // Сохраняем оригинальный timestamp для сортировки
-                        },
-                        `<button class="btn btn-warning btn-sm" onclick="showEditModal('${record.id}', '${record.sensorName}', ${record.value}, '${record.timestamp}', '${record.unit}')">Редактировать</button>
-                         <button class="btn btn-danger btn-sm" onclick="showDeleteModal('${record.id}')">Удалить</button>`
-                    ]);
-                });
-                table.order([3, 'desc']).draw();
-                subscribeToFieldUpdates(selectedFieldId);
-            })
-            .catch(error => console.error('Error fetching field data:', error));
-    }
-
-    function formatDate(timestamp) {
-        const date = new Date(timestamp);
-        const formattedDate = date.toISOString().slice(0, 10); // 2025-03-28
-        const formattedTime = date.toISOString().slice(11, 23); // 12:34:56.123
-        return `${formattedDate} ${formattedTime}`;
-    }
-
-    function showEditModal(id, sensorName, value, timestamp, unit) {
-        selectedRecordId = id;
-        selectedSensorName = sensorName;
-        selectedUnit = unit;
-
-        document.getElementById('edit-sensor-name').value = sensorName;
-        document.getElementById('edit-value').value = value;
-        document.getElementById('edit-timestamp').value = timestamp.slice(0, 16); // Берем только дату и время
-        document.getElementById('edit-unit').value = unit;
-
-        $('#editRecordModal').modal('show');
-    }
-
-    function saveRecordChanges() {
-        const value = document.getElementById('edit-value').value;
-        const timestamp = document.getElementById('edit-timestamp').value + ":00.000Z"; // Приводим к ISO формату
-        const unit = document.getElementById('edit-unit').value;
-
-        fetch(`/sensorData/${selectedRecordId}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                fieldId: selectedFieldId,
-                sensorName: selectedSensorName,
-                value: value,
-                unit: unit,
-                timestamp: timestamp
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            console.log('Record updated:', data);
-            $('#editRecordModal').modal('hide');
-            fetchFieldData();
-        })
-        .catch(error => {
-            console.error('Error updating record:', error);
-        });
-    }
-
-    function showDeleteModal(id) {
-        selectedRecordId = id;
-        $('#deleteRecordModal').modal('show');
-    }
-
-    function deleteRecord() {
-        fetch(`/sensorData/${selectedRecordId}`, {
-            method: 'DELETE'
-        })
-        .then(() => {
-            $('#deleteRecordModal').modal('hide');
-            fetchFieldData();
-        })
-        .catch(error => {
-            console.error('Error deleting record:', error);
-        });
-    }
-</script>
+<script type="text/javascript" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+<script type="text/javascript" src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.5.0/sockjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/field-data.js"></script>
 </body>
 </html>
