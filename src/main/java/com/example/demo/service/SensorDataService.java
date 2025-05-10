@@ -2,9 +2,9 @@ package com.example.demo.service;
 
 import com.example.demo.model.SensorData;
 import com.example.demo.repository.SensorDataRepository;
+import com.example.demo.repository.SensorRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
@@ -13,25 +13,35 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Service
 public class SensorDataService {
     @Autowired
     private SensorDataRepository sensorDataRepository;
 
+    @Autowired
+    private SensorRepository sensorRepository;
+
     private SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
 
-    public List<SensorData> getSensorData(String fieldId, String sensorName, String startDate, String endDate) throws ParseException {
+    public List<SensorData> getSensorData(String fieldId, String sensorId, String startDate, String endDate) throws ParseException {
         Date start = dateFormat.parse(startDate);
         Date end = dateFormat.parse(endDate);
-        return sensorDataRepository.findByFieldIdAndSensorNameAndTimestampBetween(fieldId, sensorName, start, end);
+        return sensorDataRepository.findByFieldIdAndSensorIdAndTimestampBetween(fieldId, sensorId, start, end);
     }
 
-    public List<SensorData> getAllTimeSensorData(String fieldId, String sensorName) {
-        return sensorDataRepository.findByFieldIdAndSensorName(fieldId, sensorName);
+    public List<SensorData> getAllTimeSensorData(String fieldId, String sensorId) {
+        return sensorDataRepository.findBySensorId(sensorId);
     }
 
     public List<SensorData> saveAll(List<SensorData> sensorData) {
+        // Добавляем uniqueIndex для каждой записи, если его нет
+        sensorData.forEach(data -> {
+            if (data.getUniqueIndex() == null || data.getUniqueIndex().isEmpty()) {
+                data.setUniqueIndex(UUID.randomUUID().toString());
+            }
+        });
         return sensorDataRepository.saveAll(sensorData);
     }
 
@@ -44,6 +54,10 @@ public class SensorDataService {
     }
 
     public SensorData save(SensorData sensorData) {
+        // Добавляем uniqueIndex, если его нет
+        if (sensorData.getUniqueIndex() == null || sensorData.getUniqueIndex().isEmpty()) {
+            sensorData.setUniqueIndex(UUID.randomUUID().toString());
+        }
         return sensorDataRepository.save(sensorData);
     }
 

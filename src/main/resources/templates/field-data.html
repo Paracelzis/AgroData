@@ -13,21 +13,19 @@
     <h1>Система хранения и анализа данных с полей</h1>
     <h2>Просмотр данных с датчиков</h2>
 </header>
-
 <main>
     <div id="nav-placeholder"></div>
-
     <div class="form-container">
         <label for="field-select">Выберите поле:</label>
         <select id="field-select" class="form-control"></select>
         <button class="btn btn-primary mt-2" onclick="fetchFieldData()">Отобразить</button>
     </div>
-
     <div class="table-container">
         <table id="field-data-table" class="table table-bordered">
             <thead>
             <tr>
-                <th>Название датчика</th>
+                <th>ID датчика</th> <!-- Updated header -->
+                <th>Уникальный индекс</th>
                 <th>Значение</th>
                 <th>Единицы измерения</th>
                 <th>Класс точности</th>
@@ -39,7 +37,6 @@
             <tbody></tbody>
         </table>
     </div>
-
     <!-- Modal для редактирования записи -->
     <div class="modal fade" id="editRecordModal" tabindex="-1" aria-labelledby="editRecordModalLabel" aria-hidden="true">
         <div class="modal-dialog">
@@ -49,7 +46,7 @@
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
-                        <label for="edit-sensor-name">Название датчика</label>
+                        <label for="edit-sensor-name">ID датчика</label> <!-- Updated label -->
                         <input type="text" id="edit-sensor-name" class="form-control" disabled>
                     </div>
                     <div class="form-group">
@@ -80,7 +77,6 @@
             </div>
         </div>
     </div>
-
     <!-- Modal для подтверждения удаления -->
     <div class="modal fade" id="deleteRecordModal" tabindex="-1" aria-labelledby="deleteRecordModalLabel" aria-hidden="true">
         <div class="modal-dialog">
@@ -99,7 +95,6 @@
         </div>
     </div>
 </main>
-
 <script type="text/javascript" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>

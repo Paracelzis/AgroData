@@ -2,6 +2,7 @@ package com.example.demo.controller;
 
 import com.example.demo.model.SensorData;
 import com.example.demo.service.SensorDataService;
+import com.example.demo.service.SensorService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -14,7 +15,6 @@ import java.text.ParseException;
 import java.util.List;
 import java.util.Optional;
 
-
 @RestController
 @RequestMapping("/sensorData")
 public class SensorDataController {
@@ -23,13 +23,17 @@ public class SensorDataController {
     private SensorDataService sensorDataService;
 
     @Autowired
+    private SensorService sensorService;
+
+    @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
     @PostMapping
     public List<SensorData> addSensorData(@RequestBody List<SensorData> sensorData) {
         List<SensorData> savedData = sensorDataService.saveAll(sensorData);
         // Отправляем обновления через WebSocket
-        savedData.forEach(data -> messagingTemplate.convertAndSend("/topic/field-data/" + data.getFieldId(), data));
+        savedData.forEach(data ->
+                messagingTemplate.convertAndSend("/topic/field-data/" + data.getField_id(), data));
         return savedData;
     }
 
@@ -57,7 +61,7 @@ public class SensorDataController {
         SensorData updatedSensorData = sensorDataService.save(sensorData);
 
         // Отправляем обновление через WebSocket
-        messagingTemplate.convertAndSend("/topic/field-data/" + updatedSensorData.getFieldId(), updatedSensorData);
+        messagingTemplate.convertAndSend("/topic/field-data/" + updatedSensorData.getField_id(), updatedSensorData);
 
         return ResponseEntity.ok(updatedSensorData);
     }
@@ -69,7 +73,7 @@ public class SensorDataController {
             if (sensorData.isPresent()) {
                 sensorDataService.deleteById(id);
                 // Отправляем уведомление об удалении через WebSocket
-                messagingTemplate.convertAndSend("/topic/field-data/" + sensorData.get().getFieldId(),
+                messagingTemplate.convertAndSend("/topic/field-data/" + sensorData.get().getField_id(),
                         new DeleteMessage(id));
                 return ResponseEntity.ok().build();
             } else {
@@ -80,20 +84,20 @@ public class SensorDataController {
         }
     }
 
-    @GetMapping("/{fieldId}/{sensorName}")
+    @GetMapping("/{fieldId}/{sensorId}")
     public List<SensorData> getSensorData(
             @PathVariable String fieldId,
-            @PathVariable String sensorName,
+            @PathVariable String sensorId,
             @RequestParam String start,
             @RequestParam String end) throws ParseException {
-        return sensorDataService.getSensorData(fieldId, sensorName, start, end);
+        return sensorDataService.getSensorData(fieldId, sensorId, start, end);
     }
 
-    @GetMapping("/{fieldId}/{sensorName}/all")
+    @GetMapping("/{fieldId}/{sensorId}/all")
     public List<SensorData> getAllTimeSensorData(
             @PathVariable String fieldId,
-            @PathVariable String sensorName) {
-        return sensorDataService.getAllTimeSensorData(fieldId, sensorName);
+            @PathVariable String sensorId) {
+        return sensorDataService.getAllTimeSensorData(fieldId, sensorId);
     }
 
     // Класс для сообщения об удалении

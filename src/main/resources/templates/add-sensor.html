@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Система хранения и анализа данных с полей</title>
+    <link rel="icon" href="/img/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/style_add_sensor.css">
+    <style>
+        .sensor-group {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            position: relative;
+        }
+        .sensor-group .remove-sensor {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            cursor: pointer;
+            color: #dc3545;
+            font-size: 20px;
+        }
+        .sensor-group label {
+            font-weight: bold;
+            margin-top: 10px;
+            display: block;
+        }
+        .sensor-group input {
+            margin-bottom: 10px;
+            width: 100%;
+        }
+        .extra-param-row {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        .extra-param-row input {
+            flex: 1;
+            margin-right: 10px;
+        }
+        .extra-param-row button {
+            width: auto;
+            padding: 0 10px;
+        }
+        .extra-params-container {
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            margin-bottom: 10px;
+        }
+        .param-badge {
+            display: inline-block;
+            margin: 5px;
+            padding: 5px 10px;
+            background-color: #e9ecef;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+        .param-badge .param-key {
+            font-weight: bold;
+        }
+        .param-badge .param-value {
+            margin-left: 5px;
+        }
+        .param-badge .remove-param,
+        .param-badge .edit-param {
+            margin-left: 5px;
+            cursor: pointer;
+        }
+        .param-badge .remove-param {
+            color: #dc3545;
+        }
+        .param-badge .edit-param {
+            color: #007bff;
+        }
+        .add-sensor-btn {
+            margin-bottom: 20px;
+        }
+        .sensor-header {
+            font-weight: bold;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+            padding-right: 30px;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Система хранения и анализа данных с полей</h1>
+    <h2>Добавление датчиков</h2>
+</header>
+<main>
+    <div id="nav-placeholder"></div>
+    <!-- Для добавления новых данных -->
+    <div class="form-container mt-4">
+        <h3>Выбор поля:</h3>
+        <div class="form-group">
+            <label for="sensor-field-name">Выберите поле для добавления датчиков</label>
+            <select id="sensor-field-name" class="form-control"></select>
+        </div>
+
+        <h3>Создание датчиков:</h3>
+
+        <div id="sensors-container">
+            <!-- Шаблон группы полей для датчика -->
+            <div class="sensor-group">
+                <div class="sensor-header">Датчик #1</div>
+                <span class="remove-sensor" title="Удалить датчик">&times;</span>
+
+                <label>ID датчика:</label>
+                <input type="text" class="form-control sensor-id-input" placeholder="Уникальный ID датчика">
+
+                <label>Название датчика:</label>
+                <input type="text" class="form-control sensor-name-input" placeholder="Название датчика" required>
+
+                <label>Единицы измерения:</label>
+                <input type="text" class="form-control sensor-unit-input" placeholder="Единицы измерения">
+
+                <label>Класс точности (опционально):</label>
+                <input type="text" class="form-control sensor-accuracy-input" placeholder="Класс точности">
+
+                <label>Дополнительные параметры:</label>
+                <div class="extra-params-container sensor-extra-params-list">
+                    <p>Нет дополнительных параметров</p>
+                </div>
+
+                <div class="extra-param-row">
+                    <input type="text" class="form-control sensor-param-key" placeholder="Название параметра">
+                    <input type="text" class="form-control sensor-param-value" placeholder="Значение параметра">
+                    <button type="button" class="btn btn-success add-param-button">+</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <button class="btn btn-primary add-sensor-btn" id="add-sensor-button">
+                <i class="fa fa-plus"></i> Добавить датчик
+            </button>
+        </div>
+
+        <div class="form-group mt-4">
+            <button class="btn btn-primary" id="save-all-sensors-button">
+                <i class="fa fa-save"></i> Сохранить все датчики
+            </button>
+        </div>
+    </div>
+    <br>
+</main>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/add-sensor.js"></script>
+</body>
+</html>

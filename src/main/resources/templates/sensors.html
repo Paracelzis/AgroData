@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Система хранения и анализа данных с полей</title>
+    <link rel="icon" href="/img/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/style_fields.css">
+    <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        /* Дополнительные стили для полного растяжения кнопок */
+        .modal-footer .btn {
+            width: 100%;
+            margin: 5px 0;
+        }
+
+        /* Стили для параметров */
+        .param-badge {
+            display: inline-block;
+            margin: 5px;
+            padding: 5px 10px;
+            background-color: #e9ecef;
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+
+        .param-badge .param-key {
+            font-weight: bold;
+        }
+
+        .param-badge .param-value {
+            margin-left: 5px;
+        }
+
+        .param-badge .remove-param,
+        .param-badge .edit-param {
+            margin-left: 5px;
+            cursor: pointer;
+        }
+
+        .param-badge .remove-param {
+            color: #dc3545;
+        }
+
+        .param-badge .edit-param {
+            color: #007bff;
+        }
+
+        .extra-params-container {
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+            margin-bottom: 10px;
+        }
+
+        .extra-param-row {
+            display: flex;
+            margin-bottom: 10px;
+        }
+
+        .extra-param-row input {
+            flex: 1;
+            margin-right: 10px;
+        }
+
+        .extra-param-row button {
+            width: auto;
+            padding: 0 10px;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Система хранения и анализа данных с полей</h1>
+    <h2>Управление датчиками</h2>
+</header>
+
+<main>
+    <div id="nav-placeholder"></div>
+
+    <!-- Контейнер для фильтрации по полю -->
+    <div class="form-container">
+        <label for="field-filter">Фильтр по полю:</label>
+        <select id="field-filter" class="form-control">
+            <option value="all">Все поля</option>
+        </select>
+    </div>
+
+    <!-- Таблица датчиков -->
+    <div class="table-container">
+        <table id="sensors-table" class="display">
+            <thead>
+            <tr>
+                <th>ID датчика</th>
+                <th>Название датчика</th>
+                <th>Поле</th>
+                <th>Единицы измерения</th>
+                <th>Класс точности</th>
+                <th>Доп. параметры</th>
+                <th>Действия</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <!-- Modal для редактирования датчика -->
+    <div class="modal fade" id="editSensorModal" tabindex="-1" aria-labelledby="editSensorModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editSensorModalLabel">Редактировать датчик: <span id="edit-sensor-name-display"></span></h5>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="edit-sensor-name">Название датчика:</label>
+                        <input type="text" id="edit-sensor-name" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-sensor-field-name">Поле:</label>
+                        <input type="text" id="edit-sensor-field-name" class="form-control" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-sensor-unit">Единицы измерения:</label>
+                        <input type="text" id="edit-sensor-unit" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-sensor-accuracy">Класс точности:</label>
+                        <input type="text" id="edit-sensor-accuracy" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-sensor-identifier">Уникальный идентификатор:</label>
+                        <input type="text" id="edit-sensor-identifier" class="form-control" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label>Дополнительные параметры:</label>
+                        <button id="show-sensor-params-btn" class="btn btn-primary btn-sm">Редактировать параметры</button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-block" data-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-primary btn-block" id="save-sensor-btn">Сохранить изменения</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal для подтверждения удаления -->
+    <div class="modal fade" id="deleteSensorModal" tabindex="-1" aria-labelledby="deleteSensorModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="deleteSensorModalLabel">Удалить датчик</h5>
+                </div>
+                <div class="modal-body">
+                    Вы уверены, что хотите удалить этот датчик?
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-block" data-dismiss="modal">Отмена</button>
+                    <button type="button" class="btn btn-danger btn-block" id="confirm-delete">Удалить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal для просмотра дополнительных параметров -->
+    <div class="modal fade" id="viewSensorParamsModal" tabindex="-1" aria-labelledby="viewSensorParamsModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="viewSensorParamsModalLabel">
+                        Параметры датчика: <span id="sensor-params-name"></span>
+                    </h5>
+                </div>
+                <div class="modal-body">
+                    <table id="sensor-params-table" class="table table-striped table-bordered">
+                        <thead>
+                        <tr>
+                            <th>Параметр</th>
+                            <th>Значение</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr>
+                            <td colspan="2" class="text-center">
+                                <div class="spinner-border" role="status">
+                                    <span class="sr-only">Загрузка...</span>
+                                </div>
+                                <p>Загрузка параметров...</p>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-block" data-dismiss="modal">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal для добавления/редактирования дополнительных параметров -->
+    <div class="modal fade" id="sensorExtraParamsModal" tabindex="-1" aria-labelledby="sensorExtraParamsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="sensorExtraParamsModalLabel">Дополнительные параметры</h5>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Текущие параметры:</label>
+                        <div id="extra-params-list" class="extra-params-container"></div>
+                    </div>
+                    <div class="form-group">
+                        <div class="extra-param-row">
+                            <input type="text" id="param-key" class="form-control" placeholder="Название параметра">
+                            <input type="text" id="param-value" class="form-control" placeholder="Значение параметра">
+                            <button type="button" class="btn btn-success" id="add-param-btn">+</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-block" id="close-extra-params" data-dismiss="modal">Закрыть</button>
+                    <button type="button" class="btn btn-primary btn-block" id="save-extra-params">Сохранить параметры</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script type="text/javascript" src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script src="/js/common.js"></script>
+<script src="/js/sensors.js"></script>
+</body>
+</html>

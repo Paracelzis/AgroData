@@ -11,14 +11,14 @@ import java.util.Map;
 public class SensorData {
     @Id
     private String id;
-    private String fieldId;
-    private String sensorName;
-    private String unit;
+    private String sensor_id;
+    private String field_id;  // Это имя поля в монгодб
+    private String uniqueIndex;
+
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timezone = "UTC")
     private Date timestamp;
     private double value;
-    private String accuracyClass; // Например, "±0.5%" или "Class A"
-    private Map<String, Object> extraParams; // Необязательные дополнительные параметры
+    private Map<String, Object> extraParams;
 
     // Геттеры и сеттеры
     public String getId() {
@@ -29,28 +29,45 @@ public class SensorData {
         this.id = id;
     }
 
+    public String getSensor_id() {
+        return sensor_id;
+    }
+
+    public void setSensor_id(String sensor_id) {
+        this.sensor_id = sensor_id;
+    }
+
+    public String getField_id() {
+        return field_id;
+    }
+
+    public void setField_id(String field_id) {
+        this.field_id = field_id;
+    }
+
+    // Добавляем геттеры и сеттеры с CamelCase именами для Spring Data
+    public String getSensorId() {
+        return sensor_id;
+    }
+
+    public void setSensorId(String sensorId) {
+        this.sensor_id = sensorId;
+    }
+
     public String getFieldId() {
-        return fieldId;
+        return field_id;
     }
 
     public void setFieldId(String fieldId) {
-        this.fieldId = fieldId;
+        this.field_id = fieldId;
     }
 
-    public String getSensorName() {
-        return sensorName;
+    public String getUniqueIndex() {
+        return uniqueIndex;
     }
 
-    public void setSensorName(String sensorName) {
-        this.sensorName = sensorName;
-    }
-
-    public String getUnit() {
-        return unit;
-    }
-
-    public void setUnit(String unit) {
-        this.unit = unit;
+    public void setUniqueIndex(String uniqueIndex) {
+        this.uniqueIndex = uniqueIndex;
     }
 
     public Date getTimestamp() {
@@ -67,14 +84,6 @@ public class SensorData {
 
     public void setValue(double value) {
         this.value = value;
-    }
-
-    public String getAccuracyClass() {
-        return accuracyClass;
-    }
-
-    public void setAccuracyClass(String accuracyClass) {
-        this.accuracyClass = accuracyClass;
     }
 
     public Map<String, Object> getExtraParams() {

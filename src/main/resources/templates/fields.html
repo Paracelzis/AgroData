@@ -7,11 +7,12 @@
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
     <link rel="stylesheet" type="text/css" href="/css/style_fields.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 </head>
 <body>
 <header>
     <h1>Система хранения и анализа данных с полей</h1>
-    <h2>Поля</h2>
+    <h2>Управление полями</h2>
 </header>
 
 <main>
@@ -22,6 +23,8 @@
             <thead>
             <tr>
                 <th>Название поля</th>
+                <th>Уникальный идентификатор</th>
+                <th>Дополнительные параметры</th>
                 <th>Датчики</th>
                 <th>Действия</th>
             </tr>
@@ -36,15 +39,7 @@
             <input type="text" id="new-field-name" class="form-control" placeholder="Название поля">
         </div>
         <div class="form-group">
-            <div id="sensors-container">
-                <input type="text" class="form-control sensor-input" placeholder="Название датчика">
-            </div>
-        </div>
-        <div class="form-group">
-            <button class="btn btn-secondary" onclick="addSensorInput()">Добавить датчик</button>
-        </div>
-        <div class="form-group">
-            <button class="btn btn-danger" onclick="removeLastSensorInput()">Удалить последний датчик</button>
+            <button class="btn btn-primary" onclick="showAddParamsModal('new')">Добавить дополнительные параметры</button>
         </div>
         <div class="form-group">
             <button class="btn btn-primary" onclick="addField()">Добавить поле</button>
@@ -66,14 +61,12 @@
                         <input type="text" id="edit-field-name" class="form-control" placeholder="Название поля">
                     </div>
                     <div class="form-group">
-                        <label for="edit-sensors-container">Датчики</label>
-                        <div id="edit-sensors-container"></div>
+                        <label for="edit-field-identifier">Уникальный идентификатор</label>
+                        <input type="text" id="edit-field-identifier" class="form-control" disabled>
                     </div>
                     <div class="form-group">
-                        <button class="btn btn-secondary" onclick="addEditSensorInput()">Добавить датчик</button>
-                    </div>
-                    <div class="form-group">
-                        <button class="btn btn-danger" id="removeLastEditSensorButton" onclick="removeLastEditSensorInput()">Удалить последний датчик</button>
+                        <label>Дополнительные параметры</label>
+                        <button class="btn btn-primary btn-sm" onclick="showAddParamsModal('edit')">Редактировать параметры</button>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -97,6 +90,109 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Отмена</button>
                     <button type="button" class="btn btn-danger" onclick="deleteField()">Удалить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal для добавления/редактирования дополнительных параметров -->
+    <div class="modal fade" id="extraParamsModal" tabindex="-1" aria-labelledby="extraParamsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="extraParamsModalLabel">Дополнительные параметры</h5>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Текущие параметры:</label>
+                        <div id="extra-params-list" class="extra-params-container"></div>
+                    </div>
+                    <div class="form-group">
+                        <div class="extra-param-row">
+                            <input type="text" id="param-key" class="form-control" placeholder="Название параметра">
+                            <input type="text" id="param-value" class="form-control" placeholder="Значение параметра">
+                            <button type="button" class="btn btn-success" id="add-param-btn">+</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="close-extra-params" data-dismiss="modal">Закрыть</button>
+                    <button type="button" class="btn btn-primary" id="save-extra-params">Сохранить параметры</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal для просмотра датчиков поля -->
+    <div class="modal fade" id="viewSensorsModal" tabindex="-1" aria-labelledby="viewSensorsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="viewSensorsModalLabel">Датчики поля: <span id="field-name-display"></span></h5>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table id="sensors-data-table" class="table table-striped table-bordered">
+                            <thead>
+                            <tr>
+                                <th>Название датчика</th>
+                                <th>Идентификатор</th>
+                                <th>Единица измерения</th>
+                                <th>Класс точности</th>
+                                <th>Действия</th>
+                            </tr>
+                            </thead>
+                            <tbody id="sensors-data-body">
+                            <tr>
+                                <td colspan="5" class="text-center">Загрузка данных...</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="no-sensors-message" class="alert alert-info" style="display: none;">
+                        У этого поля нет датчиков. Вы можете добавить их на странице "Добавление датчиков".
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal для просмотра дополнительных параметров датчика -->
+    <div class="modal fade" id="viewSensorParamsModal" tabindex="-1" aria-labelledby="viewSensorParamsModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="viewSensorParamsModalLabel">
+                        Параметры датчика: <span id="sensor-name-display"></span>
+                    </h5>
+                </div>
+                <div class="modal-body">
+                    <div id="sensor-params-list">
+                        <table class="table table-striped table-bordered">
+                            <thead>
+                            <tr>
+                                <th>Параметр</th>
+                                <th>Значение</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr>
+                                <td colspan="2" class="text-center">
+                                    <div class="spinner-border" role="status">
+                                        <span class="sr-only">Загрузка...</span>
+                                    </div>
+                                    <p>Загрузка параметров...</p>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Закрыть</button>
                 </div>
             </div>
         </div>

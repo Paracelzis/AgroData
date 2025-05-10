@@ -1,3 +1,11 @@
+$("#nav-placeholder").load("/nav.html", function(response, status, xhr) {
+    if (status === "error") {
+        console.error("Ошибка загрузки навигации: ", xhr.status, xhr.statusText);
+    } else {
+        highlightActiveNavItem();
+    }
+});
+
 function highlightActiveNavItem() {
     var url = window.location.href.split('#')[0];
     var links = document.querySelectorAll('.nav-item a');
