@@ -114,7 +114,13 @@
                 <span class="remove-sensor" title="Удалить датчик">&times;</span>
 
                 <label>ID датчика:</label>
-                <input type="text" class="form-control sensor-id-input" placeholder="Уникальный ID датчика">
+                <div class="input-group mb-3">
+                    <input type="text" class="form-control sensor-id-input" placeholder="Будет сгенерирован автоматически" disabled>
+                    <div class="input-group-append">
+                        <span class="input-group-text" id="basic-addon2">MongoDB ID</span>
+                    </div>
+                </div>
+                <small class="text-muted">MongoDB ID будет сгенерирован автоматически при сохранении</small>
 
                 <label>Название датчика:</label>
                 <input type="text" class="form-control sensor-name-input" placeholder="Название датчика" required>

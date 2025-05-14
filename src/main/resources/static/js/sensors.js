@@ -3,6 +3,7 @@ let selectedSensorId = null;
 let fieldsCache = new Map(); // Кэш для данных полей
 let workingParams = {}; // Рабочая копия параметров для модального окна
 let editingParamKey = null; // Ключ редактируемого параметра
+let originalParams = {}; // Исходная копия параметров для восстановления при отмене
 
 $(document).ready(function() {
     // Настройка Bootstrap для работы с вложенными модальными окнами
@@ -59,13 +60,13 @@ $(document).ready(function() {
             }
         },
         columns: [
-            { data: 'id' },
-            { data: 'sensorName' },
-            { data: 'fieldName' },
-            { data: 'unit' },
-            { data: 'accuracyClass' },
-            { data: 'extraParamsIndicator' }, // Колонка для индикатора доп. параметров
-            { data: 'actions' }
+            { data: 'sensorName' },      // Название датчика
+            { data: 'sensorIdentifier' }, // Уникальный идентификатор (будем использовать короткий id)
+            { data: 'fieldName' },       // Поле
+            { data: 'unit' },            // Единицы измерения
+            { data: 'accuracyClass' },   // Класс точности
+            { data: 'extraParamsIndicator' }, // Доп. параметры
+            { data: 'actions' }          // Действия
         ],
         drawCallback: function() {
             // Проверяем и удаляем пустые строки после отрисовки
@@ -108,26 +109,32 @@ $(document).ready(function() {
 
     // Обработчик для сохранения параметров из модального окна
     $('#save-extra-params').on('click', function() {
-        // Сохраняем параметры в рабочей копии
+        // При нажатии "Сохранить параметры" обновляем originalParams
+        originalParams = JSON.parse(JSON.stringify(workingParams));
         $('#sensorExtraParamsModal').modal('hide');
-
         // Удаляем временный фон
         $('.temp-backdrop').remove();
     });
 
     // Обработчик для отмены изменений (кнопка "Закрыть")
     $('#close-extra-params').on('click', function() {
+        // Восстанавливаем исходные параметры
+        workingParams = JSON.parse(JSON.stringify(originalParams)); // Заменить resetEditingParams() на это
         clearParamInputFields();
         $('#sensorExtraParamsModal').modal('hide');
-        $('.temp-backdrop').remove(); // Удаляем временный бэкдроп
+        $('.temp-backdrop').remove();
     });
 
     // Обработчик закрытия модального окна (любым способом)
     $('#sensorExtraParamsModal').on('hidden.bs.modal', function() {
+        // Когда закрываем без сохранения (не кнопкой "Сохранить параметры")
+        // восстанавливаем исходные параметры
+        workingParams = JSON.parse(JSON.stringify(originalParams));
+
         clearParamInputFields();
-        editingParamKey = null; // Сбрасываем режим редактирования
-        $('#add-param-btn').text('+'); // Возвращаем кнопке исходный текст
-        $('.temp-backdrop').remove(); // Удаляем временный бэкдроп
+        editingParamKey = null;
+        $('#add-param-btn').text('+');
+        $('.temp-backdrop').remove();
 
         // Возвращаем фокус на кнопку в первом модальном окне
         setTimeout(() => {
@@ -203,7 +210,7 @@ function loadFields() {
 function loadSensors(fieldId) {
     console.log("Загрузка датчиков для fieldId:", fieldId);
 
-    let url = '/sensors/all';  // Это правильно
+    let url = '/sensors/all';
 
     if (fieldId && fieldId !== 'all') {
         url = `/sensors/field/${fieldId}`;
@@ -219,7 +226,7 @@ function loadSensors(fieldId) {
             return response.json();
         })
         .then(sensors => {
-            console.log("Полученные датчики:", sensors); // Отладочная информация
+            console.log("Полученные датчики:", sensors);
 
             sensorsTable.clear();
 
@@ -228,6 +235,13 @@ function loadSensors(fieldId) {
                 sensorsTable.draw();
                 return;
             }
+
+            // Проверка на дубликаты названий датчиков по полю
+            const sensorNamesByField = {};
+            sensors.forEach(sensor => {
+                const key = `${sensor.field_id}_${sensor.sensorName}`;
+                sensorNamesByField[key] = (sensorNamesByField[key] || 0) + 1;
+            });
 
             // Создаем массив промисов для загрузки информации о полях
             const promises = sensors.map(sensor => {
@@ -238,52 +252,65 @@ function loadSensors(fieldId) {
                     fieldPromise = Promise.resolve(fieldsCache.get(sensor.field_id));
                 } else {
                     fieldPromise = fetch(`/fields/${sensor.field_id}`)
-                        .then(response => {
-                            if (!response.ok) {
-                                throw new Error(`Сетевая ошибка: ${response.status}`);
-                            }
-                            return response.json();
-                        })
-                        .then(field => {
-                            fieldsCache.set(field.id, field);
-                            return field;
-                        });
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`Сетевая ошибка: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(field => {
+                        fieldsCache.set(field.id, field);
+                        return field;
+                    });
                 }
 
                 return fieldPromise.then(field => {
                     // Проверяем наличие дополнительных параметров
                     const hasExtraParams = sensor.extraParams &&
-                                          Object.keys(sensor.extraParams).length > 0;
+                    Object.keys(sensor.extraParams).length > 0;
 
                     // Создаем индикатор для доп. параметров
                     let extraParamsIndicator;
                     if (hasExtraParams) {
                         extraParamsIndicator = `
-                            <button class="btn btn-info btn-sm view-extra-params"
-                                    onclick="viewSensorParams('${sensor.id}', '${sensor.sensorName}')">
-                                <i class="fa fa-list"></i> Показать
-                            </button>`;
+                        <button class="btn btn-info btn-sm view-extra-params"
+                            onclick="viewSensorParams('${sensor.id}',
+                            '${sensor.sensorName}')">
+                            <i class="fa fa-list"></i> Показать
+                        </button>`;
                     } else {
                         extraParamsIndicator = '<span class="text-muted">Нет</span>';
                     }
 
+                    // Формируем отображаемое название датчика
+                    // Если есть дубликаты, добавляем короткий ID
+                    let displaySensorName = sensor.sensorName;
+                    const nameKey = `${sensor.field_id}_${sensor.sensorName}`;
+                    if (sensorNamesByField[nameKey] > 1) {
+                        const shortId = sensor.id.substring(0, 8); // Первые 8 символов ID
+                        displaySensorName = `${sensor.sensorName} <small class="text-muted">(ID: ${shortId})</small>`;
+                    }
+
                     return {
-                        id: sensor.id,
-                        sensorName: sensor.sensorName,
+                        id: sensor.id, // Сохраняем полный ID для внутренних действий
+                        sensorName: displaySensorName,
+                        // Используем короткий ID для отображения в колонке "Уникальный идентификатор"
+                        sensorIdentifier: sensor.id, //.substring(0, 12) + '...',
                         fieldName: field.fieldName,
                         unit: sensor.unit || '-',
                         accuracyClass: sensor.accuracyClass || '-',
                         field_id: sensor.field_id,
-                        uniqueSensorIdentifier: sensor.uniqueSensorIdentifier,
                         extraParams: sensor.extraParams || {},
                         extraParamsIndicator: extraParamsIndicator,
                         actions: `
-                            <button class="btn btn-info btn-sm" onclick="editSensor('${sensor.id}')">
-                                Редактировать
-                            </button>
-                            <button class="btn btn-danger btn-sm" onclick="showDeleteModal('${sensor.id}')">
-                                Удалить
-                            </button>
+                        <button class="btn btn-info btn-sm"
+                            onclick="editSensor('${sensor.id}')">
+                            Редактировать
+                        </button>
+                        <button class="btn btn-danger btn-sm"
+                            onclick="showDeleteModal('${sensor.id}')">
+                            Удалить
+                        </button>
                         `
                     };
                 });
@@ -293,6 +320,12 @@ function loadSensors(fieldId) {
             Promise.all(promises)
                 .then(rows => {
                     console.log("Обработанные строки для таблицы:", rows.length);
+
+                    // Сортируем результаты по полю и названию датчика
+                    rows.sort((a, b) => {
+                        return a.fieldName.localeCompare(b.fieldName) ||
+                               a.sensorName.localeCompare(b.sensorName);
+                    });
 
                     // Добавляем все строки в таблицу
                     rows.forEach(row => {
@@ -327,7 +360,7 @@ function loadSensors(fieldId) {
         });
 }
 
-// Функция для просмотра дополнительных параметров датчика
+// Обновленная функция viewSensorParams для отображения id вместо uniqueSensorIdentifier
 function viewSensorParams(sensorId, sensorName) {
     // Показываем название датчика
     $('#sensor-params-name').text(sensorName);
@@ -344,8 +377,7 @@ function viewSensorParams(sensorId, sensorName) {
                 </div>
                 <p>Загрузка параметров...</p>
             </td>
-        </tr>
-    `);
+        </tr>`);
 
     // Показываем модальное окно
     $('#viewSensorParamsModal').modal('show');
@@ -364,6 +396,21 @@ function viewSensorParams(sensorId, sensorName) {
             // Очищаем содержимое tbody
             tbody.empty();
 
+            // Асинхронно загружаем имя поля
+            if (fieldsCache.has(sensor.field_id)) {
+                $('#sensor-field-name-display').text(fieldsCache.get(sensor.field_id).fieldName);
+            } else {
+                fetch(`/fields/${sensor.field_id}`)
+                    .then(response => response.json())
+                    .then(field => {
+                        fieldsCache.set(field.id, field);
+                        $('#sensor-field-name-display').text(field.fieldName);
+                    })
+                    .catch(error => {
+                        $('#sensor-field-name-display').text('Не удалось загрузить');
+                    });
+            }
+
             // Если есть дополнительные параметры, добавляем их в таблицу
             if (sensor.extraParams && Object.keys(sensor.extraParams).length > 0) {
                 for (const [key, value] of Object.entries(sensor.extraParams)) {
@@ -377,8 +424,7 @@ function viewSensorParams(sensorId, sensorName) {
                         <tr>
                             <td>${key}</td>
                             <td>${displayValue}</td>
-                        </tr>
-                    `);
+                        </tr>`);
                 }
             } else {
                 // Если параметров нет, отображаем сообщение
@@ -387,8 +433,7 @@ function viewSensorParams(sensorId, sensorName) {
                         <td colspan="2" class="text-center">
                             У этого датчика нет дополнительных параметров
                         </td>
-                    </tr>
-                `);
+                    </tr>`);
             }
 
             // Устанавливаем фокус на кнопку закрытия
@@ -403,12 +448,17 @@ function viewSensorParams(sensorId, sensorName) {
                     <td colspan="2" class="text-center text-danger">
                         Ошибка при загрузке параметров: ${error.message}
                     </td>
-                </tr>
-            `);
+                </tr>`);
         });
 }
 
-// Редактирование датчика (открытие модального окна)
+// Функция для сброса изменений параметров к исходным
+function resetEditingParams() {
+    // Восстанавливаем исходные параметры
+    workingParams = JSON.parse(JSON.stringify(originalParams));
+}
+
+// Обновленная функция editSensor, которая заменяет использование uniqueSensorIdentifier на id
 function editSensor(sensorId) {
     selectedSensorId = sensorId;
 
@@ -432,26 +482,32 @@ function editSensor(sensorId) {
             } else {
                 // Если поле не в кэше, получаем его
                 fetch(`/fields/${sensor.field_id}`)
-                    .then(response => {
-                        if (!response.ok) throw new Error("Ошибка получения поля");
-                        return response.json();
-                    })
-                    .then(field => {
-                        fieldsCache.set(field.id, field);
-                        $('#edit-sensor-field-name').val(field.fieldName);
-                    })
-                    .catch(error => {
-                        console.error("Ошибка при загрузке поля:", error);
-                        $('#edit-sensor-field-name').val('Не удалось загрузить');
-                    });
+                .then(response => {
+                    if (!response.ok) throw new Error("Ошибка получения поля");
+                    return response.json();
+                })
+                .then(field => {
+                    fieldsCache.set(field.id, field);
+                    $('#edit-sensor-field-name').val(field.fieldName);
+                })
+                .catch(error => {
+                    console.error("Ошибка при загрузке поля:", error);
+                    $('#edit-sensor-field-name').val('Не удалось загрузить');
+                });
             }
 
             $('#edit-sensor-unit').val(sensor.unit || '');
             $('#edit-sensor-accuracy').val(sensor.accuracyClass || '');
-            $('#edit-sensor-identifier').val(sensor.uniqueSensorIdentifier || '');
+
+            // Используем id вместо uniqueSensorIdentifier
+            const shortId = sensor.id || '';
+            $('#edit-sensor-identifier').val(shortId);
 
             // Сохраняем копию дополнительных параметров
             workingParams = {...(sensor.extraParams || {})};
+
+            // Создаем исходную копию параметров
+            originalParams = JSON.parse(JSON.stringify(workingParams));
 
             // Показываем модальное окно редактирования
             $('#editSensorModal').modal('show');
@@ -464,6 +520,15 @@ function editSensor(sensorId) {
 
 // Функция для отображения модального окна с дополнительными параметрами
 function showExtraParamsModal() {
+    // Получаем текущее название датчика из основного модального окна
+    const sensorName = $('#edit-sensor-name').val();
+
+    // Устанавливаем название датчика в заголовке модального окна параметров
+    $('#sensor-params-edit-name').text(sensorName);
+
+    // Сохраняем исходную копию параметров для восстановления при отмене
+    originalParams = JSON.parse(JSON.stringify(workingParams));
+
     // Отображаем параметры
     renderExtraParamsList();
 
@@ -484,7 +549,7 @@ function showExtraParamsModal() {
     // Показываем модальное окно
     $('#sensorExtraParamsModal').modal({
         backdrop: false, // Отключаем автоматический бэкдроп
-        keyboard: true   // Разрешаем закрытие по Esc
+        keyboard: true // Разрешаем закрытие по Esc
     });
 
     // Устанавливаем более высокий z-index для второго модального окна
@@ -611,7 +676,7 @@ function renderExtraParamsList() {
     }
 }
 
-// Сохранение изменений датчика
+// Обновленная функция saveSensorChanges без использования uniqueSensorIdentifier
 function saveSensorChanges() {
     if (!selectedSensorId) return;
 
@@ -637,6 +702,8 @@ function saveSensorChanges() {
 
             // Обновляем только нужные поля, сохраняя остальные
             // Важно: мы не меняем field_id, поскольку датчик всегда принадлежит одному полю
+            // Мы также не меняем uniqueSensorIdentifier, так как это поле сейчас не используется
+            // (хотя в будущем его можно полностью удалить)
             const updatedSensor = {
                 ...sensor,
                 sensorName: sensorName,

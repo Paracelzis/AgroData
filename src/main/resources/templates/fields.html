@@ -24,7 +24,7 @@
             <tr>
                 <th>Название поля</th>
                 <th>Уникальный идентификатор</th>
-                <th>Дополнительные параметры</th>
+                <th>Доп. параметры</th>
                 <th>Датчики</th>
                 <th>Действия</th>
             </tr>
@@ -39,10 +39,10 @@
             <input type="text" id="new-field-name" class="form-control" placeholder="Название поля">
         </div>
         <div class="form-group">
-            <button class="btn btn-primary" onclick="showAddParamsModal('new')">Добавить дополнительные параметры</button>
+            <button class="btn btn-primary" onclick="showAddParamsModal('new')">Добавить доп. параметры</button>
         </div>
         <div class="form-group">
-            <button class="btn btn-primary" onclick="addField()">Добавить поле</button>
+            <button class="btn btn-success" onclick="addField()">Добавить поле</button>
         </div>
         <br>
         <br>
@@ -65,8 +65,10 @@
                         <input type="text" id="edit-field-identifier" class="form-control" disabled>
                     </div>
                     <div class="form-group">
-                        <label>Дополнительные параметры</label>
-                        <button class="btn btn-primary btn-sm" onclick="showAddParamsModal('edit')">Редактировать параметры</button>
+                        <label>Доп. параметры</label>
+                        <button class="btn btn-primary btn-sm" onclick="showAddParamsModal('edit')">
+                            <i class="fa fa-edit"></i> Редактировать доп. параметры
+                        </button>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -100,7 +102,7 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="extraParamsModalLabel">Дополнительные параметры</h5>
+                    <h5 class="modal-title" id="extraParamsModalLabel">Редактирование доп. параметров поля</h5>
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
@@ -166,7 +168,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="viewSensorParamsModalLabel">
-                        Параметры датчика: <span id="sensor-name-display"></span>
+                        Доп. параметры датчика: <span id="sensor-name-display"></span>
                     </h5>
                 </div>
                 <div class="modal-body">
@@ -193,6 +195,42 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal для просмотра дополнительных параметров поля -->
+    <div class="modal fade" id="viewFieldParamsModal" tabindex="-1" aria-labelledby="viewFieldParamsModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="viewFieldParamsModalLabel">
+                        Доп. параметры поля: <span id="field-params-name"></span>
+                    </h5>
+                </div>
+                <div class="modal-body">
+                    <table id="field-params-table" class="table table-striped table-bordered">
+                        <thead>
+                        <tr>
+                            <th>Параметр</th>
+                            <th>Значение</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr>
+                            <td colspan="2" class="text-center">
+                                <div class="spinner-border" role="status">
+                                    <span class="sr-only">Загрузка...</span>
+                                </div>
+                                <p>Загрузка параметров...</p>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary btn-block" data-dismiss="modal">Закрыть</button>
                 </div>
             </div>
         </div>

@@ -137,3 +137,83 @@ button {
 button:hover {
     background-color: #8c968c;
 }
+
+/* Стили для параметров */
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+.table th, .table td {
+    vertical-align: middle;
+}
+
+#new-param-key.disabled {
+    background-color: #e9ecef;
+}
+
+/* Обеспечиваем корректное отображение вложенных модальных окон */
+.modal-backdrop + .modal-backdrop {
+    z-index: 1050;
+}
+
+#editParamsModal {
+    z-index: 1060;
+}
+
+/* Стили для параметров */
+.param-badge {
+    display: inline-block;
+    margin: 5px;
+    padding: 5px 10px;
+    background-color: #e9ecef;
+    border-radius: 5px;
+    font-size: 0.9em;
+}
+
+.param-badge .param-key {
+    font-weight: bold;
+}
+
+.param-badge .param-value {
+    margin-left: 5px;
+}
+
+.param-badge .remove-param,
+.param-badge .edit-param {
+    margin-left: 5px;
+    cursor: pointer;
+}
+
+.param-badge .remove-param {
+    color: #dc3545;
+}
+
+.param-badge .edit-param {
+    color: #007bff;
+}
+
+.extra-params-container {
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 10px;
+    border: 1px solid #eee;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+    margin-bottom: 10px;
+}
+
+.extra-param-row {
+    display: flex;
+    margin-bottom: 10px;
+}
+
+.extra-param-row input {
+    flex: 1;
+    margin-right: 10px;
+}
+
+.extra-param-row button {
+    width: auto;
+    padding: 0 10px;
+}

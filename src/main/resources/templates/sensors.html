@@ -95,8 +95,8 @@
         <table id="sensors-table" class="display">
             <thead>
             <tr>
-                <th>ID датчика</th>
                 <th>Название датчика</th>
+                <th>Уникальный идентификатор</th>
                 <th>Поле</th>
                 <th>Единицы измерения</th>
                 <th>Класс точности</th>
@@ -117,12 +117,16 @@
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
-                        <label for="edit-sensor-name">Название датчика:</label>
-                        <input type="text" id="edit-sensor-name" class="form-control">
-                    </div>
-                    <div class="form-group">
                         <label for="edit-sensor-field-name">Поле:</label>
                         <input type="text" id="edit-sensor-field-name" class="form-control" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-sensor-identifier">Уникальный идентификатор:</label>
+                        <input type="text" id="edit-sensor-identifier" class="form-control" disabled>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-sensor-name">Название датчика:</label>
+                        <input type="text" id="edit-sensor-name" class="form-control">
                     </div>
                     <div class="form-group">
                         <label for="edit-sensor-unit">Единицы измерения:</label>
@@ -133,12 +137,10 @@
                         <input type="text" id="edit-sensor-accuracy" class="form-control">
                     </div>
                     <div class="form-group">
-                        <label for="edit-sensor-identifier">Уникальный идентификатор:</label>
-                        <input type="text" id="edit-sensor-identifier" class="form-control" disabled>
-                    </div>
-                    <div class="form-group">
-                        <label>Дополнительные параметры:</label>
-                        <button id="show-sensor-params-btn" class="btn btn-primary btn-sm">Редактировать параметры</button>
+                        <label>Доп. параметры:</label>
+                        <button id="show-sensor-params-btn" class="btn btn-primary btn-sm">
+                            <i class="fa fa-edit"></i> Редактировать доп. параметры
+                        </button>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -173,7 +175,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="viewSensorParamsModalLabel">
-                        Параметры датчика: <span id="sensor-params-name"></span>
+                        Доп. параметры датчика: <span id="sensor-params-name"></span>
                     </h5>
                 </div>
                 <div class="modal-body">
@@ -208,7 +210,7 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="sensorExtraParamsModalLabel">Дополнительные параметры</h5>
+                    <h5 class="modal-title" id="sensorExtraParamsModalLabel">Доп. параметры датчика: <span id="sensor-params-edit-name"></span></h5>
                 </div>
                 <div class="modal-body">
                     <div class="form-group">

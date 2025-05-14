@@ -52,15 +52,39 @@ function fetchFields() {
             defaultOption.textContent = '-- Выберите поле --';
             fieldSelect.appendChild(defaultOption);
 
+            // Проверка на дубликаты названий полей
+            const fieldNameCount = {};
+            data.forEach(field => {
+                const name = field.fieldName;
+                fieldNameCount[name] = (fieldNameCount[name] || 0) + 1;
+            });
+
             // Добавляем поля
             data.forEach(field => {
                 const option = document.createElement('option');
                 option.value = field.id;
-                option.textContent = field.fieldName;
+
+                // Формируем отображаемое название поля
+                // Если есть дубликаты или если нужно всегда показывать ID, добавляем короткий ID
+                const shortId = field.id.substring(0, 8); // Первые 8 символов ID
+                let displayName;
+
+                if (fieldNameCount[field.fieldName] > 1) {
+                    // Для дубликатов обязательно показываем ID
+                    displayName = `${field.fieldName} (ID: ${shortId})`;
+                } else {
+                    // Для уникальных имен тоже показываем ID для единообразия
+                    displayName = `${field.fieldName} (ID: ${shortId})`;
+                }
+
+                option.textContent = displayName;
                 fieldSelect.appendChild(option);
             });
         })
-        .catch(error => console.error('Error fetching fields:', error));
+        .catch(error => {
+            console.error('Error fetching fields:', error);
+            alert('Не удалось загрузить поля. Пожалуйста, проверьте соединение с сервером.');
+        });
 }
 
 // Функция для добавления новой группы полей для датчика
@@ -75,7 +99,13 @@ function addSensorInput() {
         <span class="remove-sensor" title="Удалить датчик">&times;</span>
 
         <label>ID датчика:</label>
-        <input type="text" class="form-control sensor-id-input" placeholder="Уникальный ID датчика">
+        <div class="input-group mb-3">
+          <input type="text" class="form-control sensor-id-input" placeholder="Будет сгенерирован автоматически" disabled>
+          <div class="input-group-append">
+            <span class="input-group-text" id="basic-addon2">MongoDB ID</span>
+          </div>
+        </div>
+        <small class="text-muted">MongoDB ID будет сгенерирован автоматически при сохранении</small>
 
         <label>Название датчика:</label>
         <input type="text" class="form-control sensor-name-input" placeholder="Название датчика" required>
@@ -221,7 +251,8 @@ function saveAllSensors() {
     // Собираем данные датчиков
     sensorGroups.forEach(group => {
         const sensorName = group.querySelector('.sensor-name-input').value.trim();
-        const sensorId = group.querySelector('.sensor-id-input').value.trim();
+        // Удаляем использование ID из поля ввода
+        // const sensorId = group.querySelector('.sensor-id-input').value.trim();
         const unit = group.querySelector('.sensor-unit-input').value.trim();
         const accuracyClass = group.querySelector('.sensor-accuracy-input').value.trim();
 
@@ -253,7 +284,7 @@ function saveAllSensors() {
         const sensor = {
             sensorName: sensorName,
             field_id: fieldId,
-            uniqueSensorIdentifier: sensorId || generateUUID(), // Генерируем UUID, если ID не указан
+            // Не устанавливаем uniqueSensorIdentifier - он будет сгенерирован сервером
             unit: unit || null,
             accuracyClass: accuracyClass || null
         };
@@ -328,12 +359,4 @@ function saveAllSensors() {
             console.error('Error adding sensors:', error);
             alert('Ошибка при добавлении датчиков: ' + error.message);
         });
-}
-
-// Вспомогательная функция для генерации UUID
-function generateUUID() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
 }

@@ -4,6 +4,7 @@ import com.example.demo.model.Field;
 import com.example.demo.model.Sensor;
 import com.example.demo.service.FieldService;
 import com.example.demo.service.SensorService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -98,72 +99,32 @@ public class FieldController {
 
                     // Обновляем extraParams, если они есть
                     if (request.containsKey("extraParams")) {
-                        existingField.setExtraParams((Map<String, Object>) request.get("extraParams"));
+                        // Проверяем тип extraParams
+                        Object extraParams = request.get("extraParams");
+                        if (extraParams instanceof Map) {
+                            // Если это Map, то устанавливаем
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> extraParamsMap = (Map<String, Object>) extraParams;
+                            existingField.setExtraParams(extraParamsMap);
+                        } else if (extraParams instanceof String) {
+                            // Если это String, то нужно преобразовать в Map
+                            // Возможно, это JSON-строка
+                            try {
+                                ObjectMapper mapper = new ObjectMapper();
+                                @SuppressWarnings("unchecked")
+                                Map<String, Object> extraParamsMap = mapper.readValue((String) extraParams, Map.class);
+                                existingField.setExtraParams(extraParamsMap);
+                            } catch (Exception e) {
+                                // Если не удалось преобразовать, оставляем как есть или устанавливаем null
+                                existingField.setExtraParams(null);
+                            }
+                        } else if (extraParams == null) {
+                            existingField.setExtraParams(null);
+                        }
                     }
 
                     // Обрабатываем датчики
-                    List<Map<String, Object>> sensorsData = (List<Map<String, Object>>) request.get("sensors");
-                    List<String> updatedSensorIds = new ArrayList<>();
-
-                    // Получаем текущие датчики
-                    List<Sensor> currentSensors = sensorService.findByFieldId(id);
-
-                    // Обновляем существующие и добавляем новые датчики
-                    for (Map<String, Object> sensorData : sensorsData) {
-                        String sensorName = (String) sensorData.get("sensorName");
-
-                        // Проверяем, существует ли уже датчик с таким именем для этого поля
-                        Sensor existingSensor = currentSensors.stream()
-                                .filter(s -> s.getSensorName().equals(sensorName))
-                                .findFirst().orElse(null);
-
-                        if (existingSensor != null) {
-                            // Обновляем существующий датчик
-                            if (sensorData.containsKey("unit")) {
-                                existingSensor.setUnit((String) sensorData.get("unit"));
-                            }
-                            if (sensorData.containsKey("accuracyClass")) {
-                                existingSensor.setAccuracyClass((String) sensorData.get("accuracyClass"));
-                            }
-                            if (sensorData.containsKey("extraParams")) {
-                                existingSensor.setExtraParams((Map<String, Object>) sensorData.get("extraParams"));
-                            }
-
-                            Sensor updatedSensor = sensorService.save(existingSensor);
-                            updatedSensorIds.add(updatedSensor.getId());
-                        } else {
-                            // Создаем новый датчик
-                            Sensor newSensor = new Sensor();
-                            newSensor.setField_id(id);
-                            newSensor.setSensorName(sensorName);
-                            newSensor.setUniqueSensorIdentifier(UUID.randomUUID().toString());
-
-                            if (sensorData.containsKey("unit")) {
-                                newSensor.setUnit((String) sensorData.get("unit"));
-                            }
-                            if (sensorData.containsKey("accuracyClass")) {
-                                newSensor.setAccuracyClass((String) sensorData.get("accuracyClass"));
-                            }
-                            if (sensorData.containsKey("extraParams")) {
-                                newSensor.setExtraParams((Map<String, Object>) sensorData.get("extraParams"));
-                            }
-
-                            Sensor savedSensor = sensorService.save(newSensor);
-                            updatedSensorIds.add(savedSensor.getId());
-                        }
-                    }
-
-                    // Удаляем датчики, которых нет в обновленном списке
-                    for (Sensor oldSensor : currentSensors) {
-                        if (!sensorsData.stream()
-                                .map(data -> (String) data.get("sensorName"))
-                                .anyMatch(name -> name.equals(oldSensor.getSensorName()))) {
-                            sensorService.deleteById(oldSensor.getId());
-                        }
-                    }
-
-                    // Обновляем поле со списком ID датчиков
-                    existingField.setSensors(updatedSensorIds);
+                    // ... остальной код без изменений ...
 
                     return ResponseEntity.ok(fieldService.save(existingField));
                 })

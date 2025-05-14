@@ -6,6 +6,11 @@ let selectedSensorId = null;
 let stompClient = null;
 let currentSubscription = null;
 
+// Объект для хранения параметров при редактировании
+let editingParams = {};
+let originalParams = {}; // Исходная копия параметров для восстановления при отмене
+let editingParamKey = null; // Для режима редактирования параметра
+
 $(document).ready(function() {
     // Настройка Bootstrap для работы с вложенными модальными окнами
     $(document).on('show.bs.modal', '.modal', function() {
@@ -31,9 +36,80 @@ $(document).ready(function() {
         }
     });
 
+    // Инициализация обработчиков для редактирования параметров
+    // Обработчик кнопки редактирования параметров в модальном окне редактирования записи
+    $('#edit-params-btn').on('click', function() {
+        showEditParamsModal();
+    });
+
+    // Обработчик для кнопки добавления/обновления параметра
+    $('#add-param-btn').on('click', function() {
+        if (editingParamKey === null) {
+            // Режим добавления
+            addExtraParam();
+        } else {
+            // Режим обновления
+            updateExtraParam();
+        }
+    });
+
+    // Обработчик для сохранения параметров из модального окна
+    $('#save-extra-params').on('click', function() {
+        // Отмечаем, что используется метод сохранения
+        $(this).addClass('active');
+
+        // Сохраняем текущие параметры как оригинальные
+        originalParams = JSON.parse(JSON.stringify(editingParams));
+
+        // Закрываем модальное окно
+        $('#editParamsModal').modal('hide');
+        $('.temp-backdrop').remove(); // Удаляем временный бэкдроп
+
+        // Сбрасываем состояние активности после небольшой задержки
+        setTimeout(() => {
+            $(this).removeClass('active');
+        }, 100);
+    });
+
+    // Обработчик для отмены изменений (кнопка "Закрыть")
+    $('#close-extra-params').on('click', function() {
+        // Восстанавливаем исходные параметры
+        resetEditingParams();
+        clearParamInputFields();
+        $('#editParamsModal').modal('hide');
+        $('.temp-backdrop').remove(); // Удаляем временный бэкдроп
+    });
+
+    // Обработчик закрытия модального окна (любым способом)
+    $('#editParamsModal').on('hidden.bs.modal', function() {
+        // Восстанавливаем исходные параметры только при закрытии без сохранения
+        // Проверка на существование активного метода очистки
+        if (!document.getElementById('save-extra-params').classList.contains('active')) {
+            resetEditingParams();
+        }
+
+        clearParamInputFields();
+        editingParamKey = null; // Сбрасываем режим редактирования
+        $('#add-param-btn').text('+'); // Возвращаем кнопке исходный текст
+        $('.temp-backdrop').remove(); // Удаляем временный бэкдроп
+
+        // Возвращаем фокус на кнопку в первом модальном окне
+        setTimeout(() => {
+            if ($('#editRecordModal').is(':visible')) {
+                $('#edit-params-btn').focus();
+            }
+        }, 100);
+    });
+
     initDataTable();
     connectWebSocket(); // fetchFields будет вызван после успешного подключения
 });
+
+// Функция для сброса изменений параметров к исходным
+function resetEditingParams() {
+    // Восстанавливаем исходные параметры
+    editingParams = JSON.parse(JSON.stringify(originalParams));
+}
 
 $(function(){
     $("#nav-placeholder").load("/nav.html", function() {
@@ -136,10 +212,21 @@ function fetchFields() {
             const fieldSelect = document.getElementById('field-select');
             fieldSelect.innerHTML = '';
 
+            // Проверка на дубликаты названий полей
+            const fieldNameCount = {};
+            data.forEach(field => {
+                const name = field.fieldName;
+                fieldNameCount[name] = (fieldNameCount[name] || 0) + 1;
+            });
+
             data.forEach(field => {
                 const option = document.createElement('option');
                 option.value = field.id;
-                option.textContent = field.fieldName;
+
+                // Формируем отображаемое название поля с ID для всех полей
+                const shortId = field.id.substring(0, 8); // Первые 8 символов ID
+                option.textContent = `${field.fieldName} (ID: ${shortId})`;
+
                 fieldSelect.appendChild(option);
             });
 
@@ -150,6 +237,8 @@ function fetchFields() {
         })
         .catch(error => {
             console.error('Error fetching fields:', error);
+            // Добавляем сообщение об ошибке для пользователя
+            alert('Не удалось загрузить список полей. Пожалуйста, проверьте соединение с сервером.');
         });
 }
 
@@ -197,26 +286,35 @@ function fetchFieldData() {
 
                         const formattedDate = formatDate(record.timestamp);
                         const accuracyClass = sensor.accuracyClass || '-';
-                        const extraParams = record.extraParams ? JSON.stringify(record.extraParams) : '-';
+
+                        // Проверяем наличие дополнительных параметров
+                        const hasExtraParams = record.extraParams && Object.keys(record.extraParams).length > 0;
+                        const extraParamsStr = JSON.stringify(record.extraParams || {}).replace(/"/g, '&quot;');
+                        const extraParamsDisplay = hasExtraParams ?
+                            `<button class="btn btn-info btn-sm view-params-btn"
+                            onclick="viewRecordParams('${record.id}', '${sensor.sensorName || sensor.id}', '${extraParamsStr}')">
+                            <i class="fa fa-list"></i> Показать
+                            </button>` :
+                            '<span class="text-muted">Нет</span>';
 
                         const rowData = {
                             id: record.id,
                             sensorId: sensor.sensorName || sensor.id, // Отображаем имя датчика вместо ID
-                            uniqueIndex: record.uniqueIndex || '-',
+                            uniqueIndex: record.id || '-',
                             value: record.value !== undefined ? record.value : '-',
                             unit: sensor.unit || '-',
                             accuracyClass: accuracyClass,
-                            extraParams: extraParams,
+                            extraParams: extraParamsDisplay,
                             timestamp: formattedDate,
                             actions: `<button class="btn btn-warning btn-sm"
                                 onclick="showEditModal('${record.id}', '${sensor.id}',
-                                '${sensor.sensorName || ''}', ${record.value || 0},
-                                '${record.timestamp || ''}', '${sensor.unit || ''}',
-                                '${sensor.accuracyClass || ''}', '${extraParams}')">
-                                Редактировать</button>
+                                '${(sensor.sensorName || '').replace(/'/g, "\\'")}', ${record.value || 0},
+                                '${record.timestamp || ''}', '${(sensor.unit || '').replace(/'/g, "\\'")}',
+                                '${(sensor.accuracyClass || '').replace(/'/g, "\\'")}', '${extraParamsStr.replace(/'/g, "\\'")}')">
+                                <i class="fa fa-edit"></i> Редактировать</button>
                                 <button class="btn btn-danger btn-sm"
                                 onclick="showDeleteModal('${record.id}')">
-                                Удалить</button>`
+                                <i class="fa fa-trash"></i> Удалить</button>`
                         };
 
                         console.log('Adding row:', rowData);
@@ -297,26 +395,35 @@ function subscribeToFieldUpdates(fieldId) {
 
                                 const formattedDate = formatDate(data.timestamp);
                                 const accuracyClass = sensor.accuracyClass || '-';
-                                const extraParams = data.extraParams ? JSON.stringify(data.extraParams) : '-';
+
+                                // Проверяем наличие дополнительных параметров
+                                const hasExtraParams = data.extraParams && Object.keys(data.extraParams).length > 0;
+                                const extraParamsStr = data.extraParams ? JSON.stringify(data.extraParams) : '{}';
+                                const extraParamsDisplay = hasExtraParams ?
+                                    `<button class="btn btn-info btn-sm view-params-btn"
+                                    onclick="viewRecordParams('${data.id}', '${sensor.sensorName || sensor.id}', '${extraParamsStr.replace(/'/g, "\\'")}')">
+                                    <i class="fa fa-list"></i> Показать
+                                    </button>` :
+                                    '<span class="text-muted">Нет</span>';
 
                                 const rowData = {
                                     id: data.id,
                                     sensorId: sensor.sensorName || sensor.id, // Отображаем имя датчика вместо ID
-                                    uniqueIndex: data.uniqueIndex || '-',
+                                    uniqueIndex: data.id || '-',
                                     value: data.value !== undefined ? data.value : '-',
                                     unit: sensor.unit || '-',
                                     accuracyClass: accuracyClass,
-                                    extraParams: extraParams,
+                                    extraParams: extraParamsDisplay,
                                     timestamp: formattedDate,
                                     actions: `<button class="btn btn-warning btn-sm"
                                         onclick="showEditModal('${data.id}', '${sensor.id}',
-                                        '${sensor.sensorName || ''}', ${data.value || 0},
-                                        '${data.timestamp || ''}', '${sensor.unit || ''}',
-                                        '${sensor.accuracyClass || ''}', '${extraParams}')">
-                                        Редактировать</button>
+                                        '${(sensor.sensorName || '').replace(/'/g, "\\'")}', ${data.value || 0},
+                                        '${data.timestamp || ''}', '${(sensor.unit || '').replace(/'/g, "\\'")}',
+                                        '${(sensor.accuracyClass || '').replace(/'/g, "\\'")}', '${extraParamsStr.replace(/'/g, "\\'")}')">
+                                        <i class="fa fa-edit"></i> Редактировать</button>
                                         <button class="btn btn-danger btn-sm"
                                         onclick="showDeleteModal('${data.id}')">
-                                        Удалить</button>`
+                                        <i class="fa fa-trash"></i> Удалить</button>`
                                 };
 
                                 console.log('Adding WebSocket row:', rowData);
@@ -361,7 +468,236 @@ function formatDate(timestamp) {
     return { display: display, sort: date.getTime() };
 }
 
-function showEditModal(id, sensorId, sensorName, value, timestamp, unit, accuracyClass, extraParams) {
+// Функция для отображения модального окна редактирования параметров
+function showEditParamsModal() {
+    // Устанавливаем название записи
+    const sensorName = document.getElementById('edit-sensor-name').value;
+    $('#edit-params-record-name').text(sensorName);
+
+    // Сохраняем исходную копию параметров для восстановления при отмене
+    originalParams = JSON.parse(JSON.stringify(editingParams));
+
+    // Отображаем параметры
+    renderExtraParamsList();
+
+    // Очищаем поля ввода
+    clearParamInputFields();
+
+    // Сбрасываем состояние активности кнопки сохранения
+    document.getElementById('save-extra-params').classList.remove('active');
+
+    // Временно скрываем фон первого модального окна при открытии второго
+    if ($('.modal-backdrop').length > 0) {
+        // Находим последний бэкдроп и увеличиваем его z-index
+        const currentBackdrop = $('.modal-backdrop').last();
+        const newZIndex = parseInt(currentBackdrop.css('z-index')) + 10;
+
+        // Создаем новый бэкдроп для второго модального окна
+        $('body').append('<div class="modal-backdrop show temp-backdrop"></div>');
+        $('.temp-backdrop').css('z-index', newZIndex);
+    }
+
+    // Показываем модальное окно
+    $('#editParamsModal').modal({
+        backdrop: false, // Отключаем автоматический бэкдроп
+        keyboard: true // Разрешаем закрытие по Esc
+    });
+
+    // Устанавливаем более высокий z-index для второго модального окна
+    setTimeout(() => {
+        $('#editParamsModal').css('z-index', 1060);
+    }, 10);
+}
+
+// Функция для отображения списка дополнительных параметров
+function renderExtraParamsList() {
+    const container = document.getElementById('extra-params-list');
+    container.innerHTML = '';
+
+    if (Object.keys(editingParams).length === 0) {
+        container.innerHTML = '<p>Нет дополнительных параметров</p>';
+        return;
+    }
+
+    for (const [key, value] of Object.entries(editingParams)) {
+        const paramBadge = document.createElement('div');
+        paramBadge.className = 'param-badge';
+
+        // Экранируем кавычки в ключе для безопасного использования в onclick
+        const escapedKey = key.replace(/(['"\\])/g, '\\$1');
+
+        paramBadge.innerHTML = `
+            <span class="param-key">${key}:</span>
+            <span class="param-value">${value}</span>
+            <span class="edit-param" onclick="editExtraParam('${escapedKey}')">✏️</span>
+            <span class="remove-param" onclick="removeExtraParam('${escapedKey}')">&times;</span>
+        `;
+        container.appendChild(paramBadge);
+    }
+}
+
+// Функция для добавления дополнительного параметра
+function addExtraParam() {
+    const key = document.getElementById('param-key').value.trim();
+    const value = document.getElementById('param-value').value.trim();
+
+    if (!key) {
+        alert('Название параметра не может быть пустым');
+        return;
+    }
+
+    // Проверяем, существует ли уже параметр с таким ключом
+    if (editingParams.hasOwnProperty(key)) {
+        alert(`Параметр с названием "${key}" уже существует. Используйте редактирование для изменения значения.`);
+        return;
+    }
+
+    // Определяем тип значения и преобразуем при необходимости
+    let parsedValue = value;
+    if (value.toLowerCase() === 'true') {
+        parsedValue = true;
+    } else if (value.toLowerCase() === 'false') {
+        parsedValue = false;
+    } else if (!isNaN(value) && value !== '') {
+        parsedValue = Number(value);
+    }
+
+    // Добавляем в рабочую копию
+    editingParams[key] = parsedValue;
+
+    // Очищаем поля ввода
+    clearParamInputFields();
+
+    // Обновляем отображение списка параметров
+    renderExtraParamsList();
+}
+
+// Функция для редактирования параметра
+function editExtraParam(key) {
+    if (editingParams.hasOwnProperty(key)) {
+        // Устанавливаем режим редактирования
+        editingParamKey = key;
+
+        // Заполняем поля значениями
+        document.getElementById('param-key').value = key;
+        document.getElementById('param-key').disabled = true; // Блокируем изменение ключа
+        document.getElementById('param-value').value = editingParams[key];
+
+        // Меняем текст кнопки
+        $('#add-param-btn').text('✓');
+    }
+}
+
+// Функция для обновления значения параметра
+function updateExtraParam() {
+    if (editingParamKey === null) return;
+
+    const value = document.getElementById('param-value').value.trim();
+
+    // Определяем тип значения и преобразуем при необходимости
+    let parsedValue = value;
+    if (value.toLowerCase() === 'true') {
+        parsedValue = true;
+    } else if (value.toLowerCase() === 'false') {
+        parsedValue = false;
+    } else if (!isNaN(value) && value !== '') {
+        parsedValue = Number(value);
+    }
+
+    // Обновляем значение
+    editingParams[editingParamKey] = parsedValue;
+
+    // Очищаем поля ввода и сбрасываем режим редактирования
+    clearParamInputFields();
+
+    // Обновляем отображение списка параметров
+    renderExtraParamsList();
+}
+
+// Функция для удаления параметра
+function removeExtraParam(key) {
+    if (editingParams.hasOwnProperty(key)) {
+        delete editingParams[key];
+        renderExtraParamsList();
+
+        // Если мы редактировали этот параметр, сбрасываем режим редактирования
+        if (editingParamKey === key) {
+            editingParamKey = null;
+            document.getElementById('param-key').value = '';
+            document.getElementById('param-key').disabled = false;
+            document.getElementById('param-value').value = '';
+            $('#add-param-btn').text('+');
+        }
+    }
+}
+
+// Функция для очистки полей ввода
+function clearParamInputFields() {
+    document.getElementById('param-key').value = '';
+    document.getElementById('param-value').value = '';
+    document.getElementById('param-key').disabled = false;
+    editingParamKey = null;
+    $('#add-param-btn').text('+');
+}
+
+// Функция для показа дополнительных параметров записи
+function viewRecordParams(id, sensorName, extraParamsStr) {
+    // Показываем имя записи
+    $('#params-record-name').text(sensorName);
+
+    // Находим tbody таблицы параметров
+    const tbody = $('#params-table').find('tbody');
+
+    // Очищаем содержимое tbody
+    tbody.empty();
+
+    // Пытаемся распарсить JSON строку параметров
+    try {
+        const extraParams = JSON.parse(extraParamsStr);
+
+        if (extraParams && Object.keys(extraParams).length > 0) {
+            // Добавляем строки с параметрами
+            for (const [key, value] of Object.entries(extraParams)) {
+                // Преобразуем значение в строку для отображения
+                let displayValue = value;
+                if (typeof value === 'object' && value !== null) {
+                    displayValue = JSON.stringify(value);
+                }
+
+                tbody.append(`
+                <tr>
+                    <td>${key}</td>
+                    <td>${displayValue}</td>
+                </tr>
+                `);
+            }
+        } else {
+            // Отображаем сообщение об отсутствии параметров
+            tbody.append(`
+            <tr>
+                <td colspan="2" class="text-center">
+                У этой записи нет дополнительных параметров
+                </td>
+            </tr>
+            `);
+        }
+    } catch (e) {
+        console.error('Ошибка при парсинге параметров:', e, extraParamsStr);
+        // В случае ошибки при парсинге JSON
+        tbody.append(`
+        <tr>
+            <td colspan="2" class="text-center text-danger">
+            Ошибка при обработке дополнительных параметров: ${e.message}
+            </td>
+        </tr>
+        `);
+    }
+
+    // Показываем модальное окно
+    $('#viewParamsModal').modal('show');
+}
+
+function showEditModal(id, sensorId, sensorName, value, timestamp, unit, accuracyClass, extraParamsStr) {
     selectedRecordId = id;
     selectedSensorId = sensorId;
 
@@ -378,7 +714,20 @@ function showEditModal(id, sensorId, sensorName, value, timestamp, unit, accurac
 
     document.getElementById('edit-unit').value = unit;
     document.getElementById('edit-accuracy-class').value = accuracyClass || '';
-    document.getElementById('edit-extra-params').value = extraParams !== 'undefined' ? extraParams : '{}';
+
+    // Парсим JSON строку параметров
+    editingParams = {};
+    try {
+        const params = JSON.parse(extraParamsStr);
+        if (params && typeof params === 'object') {
+            editingParams = { ...params }; // Создаем копию объекта
+        }
+    } catch (e) {
+        console.warn("Ошибка при парсинге JSON параметров:", e);
+    }
+
+    // Создаем исходную копию параметров
+    originalParams = JSON.parse(JSON.stringify(editingParams));
 
     $('#editRecordModal').modal('show');
 }
@@ -390,18 +739,6 @@ function saveRecordChanges() {
     const inputTimestamp = document.getElementById('edit-timestamp').value;
     const date = new Date(inputTimestamp);
     const timestamp = date.toISOString();
-
-    // Получаем JSON из текстового поля
-    const extraParamsInput = document.getElementById('edit-extra-params').value.trim();
-    let extraParams = null;
-    if (extraParamsInput) {
-        try {
-            extraParams = JSON.parse(extraParamsInput);
-        } catch (e) {
-            alert('Некорректный формат дополнительных параметров: ' + e.message);
-            return;
-        }
-    }
 
     // Получаем детали датчика
     fetch(`/sensors/${selectedSensorId}`)
@@ -446,7 +783,7 @@ function saveRecordChanges() {
                         field_id: selectedFieldId,
                         value: parseFloat(value),
                         timestamp: timestamp,
-                        extraParams: extraParams
+                        extraParams: Object.keys(editingParams).length > 0 ? editingParams : null
                     })
                 });
             })
@@ -455,10 +792,15 @@ function saveRecordChanges() {
                 console.log('Record updated:', data);
                 $('#editRecordModal').modal('hide');
                 fetchFieldData();
+            })
+            .catch(error => {
+                console.error('Error updating record data:', error);
+                alert('Ошибка при обновлении записи: ' + error.message);
             });
         })
         .catch(error => {
-            console.error('Error updating record:', error);
+            console.error('Error fetching sensor details:', error);
+            alert('Ошибка при получении данных датчика: ' + error.message);
         });
 }
 
@@ -468,14 +810,15 @@ function showDeleteModal(id) {
 }
 
 function deleteRecord() {
-    fetch(`/sensorData/${selectedRecordId}`, {
-        method: 'DELETE'
-    })
-        .then(() => {
-            $('#deleteRecordModal').modal('hide');
-            fetchFieldData();
-        })
-        .catch(error => {
-            console.error('Error deleting record:', error);
-        });
+     fetch(`/sensorData/${selectedRecordId}`, {
+         method: 'DELETE'
+     })
+         .then(() => {
+             $('#deleteRecordModal').modal('hide');
+             fetchFieldData();
+         })
+         .catch(error => {
+             console.error('Error deleting record:', error);
+             alert('Ошибка при удалении записи: ' + error.message);
+         });
 }

@@ -4,6 +4,8 @@ let currentModalMode = 'new'; // 'new' или 'edit'
 let fieldParamsMap = new Map(); // Хранилище параметров по id полей
 let workingParams = {}; // Рабочая копия параметров для модального окна
 let editingParamKey = null; // Ключ редактируемого параметра
+let originalParams = {}; // Исходная копия параметров для восстановления при отмене
+let serverOriginalParams = {};
 
 // В начало файла добавьте:
 $(document).ready(function() {
@@ -35,6 +37,28 @@ $(document).ready(function() {
     $('#viewSensorParamsModal').on('hidden.bs.modal', function() {
         // Перемещаем фокус на элемент вне модального окна
         $('#field-name-display').focus();
+    });
+
+    $('#editFieldModal .btn-secondary, #editFieldModal .close').on('click', function() {
+        // Восстанавливаем параметры из сервера
+        if (selectedFieldId) {
+            if (Object.keys(serverOriginalParams).length > 0) {
+                fieldParamsMap.set(selectedFieldId, JSON.parse(JSON.stringify(serverOriginalParams)));
+            } else {
+                fieldParamsMap.delete(selectedFieldId);
+            }
+        }
+    });
+
+    $('#editFieldModal').on('hidden.bs.modal', function() {
+        // Восстанавливаем параметры из сервера только если модальное окно закрывается без сохранения
+        if (selectedFieldId) {
+            if (Object.keys(serverOriginalParams).length > 0) {
+                fieldParamsMap.set(selectedFieldId, JSON.parse(JSON.stringify(serverOriginalParams)));
+            } else {
+                fieldParamsMap.delete(selectedFieldId);
+            }
+        }
     });
 });
 
@@ -74,6 +98,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Обработчик для сохранения параметров из модального окна
     $('#save-extra-params').on('click', function() {
+        // Обновляем originalParams для предотвращения восстановления при закрытии
+        originalParams = {...workingParams};
+
         if (currentModalMode === 'new') {
             // Для новых полей сохраняем параметры в переменной
             fieldParamsMap.set('new', {...workingParams});
@@ -88,6 +115,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Обработчик для отмены изменений (кнопка "Закрыть")
     $('#close-extra-params').on('click', function() {
+        // Восстанавливаем параметры из оригинальной копии
+        workingParams = {...originalParams};
+
         clearParamInputFields();
         $('#extraParamsModal').modal('hide');
         $('.temp-backdrop').remove(); // Удаляем временный бэкдроп
@@ -95,6 +125,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Обработчик закрытия модального окна (любым способом)
     $('#extraParamsModal').on('hidden.bs.modal', function() {
+        // Восстанавливаем параметры из оригинальной копии (только если не было сохранения)
+        workingParams = {...originalParams};
+
         clearParamInputFields();
         editingParamKey = null; // Сбрасываем режим редактирования
         $('#add-param-btn').text('+'); // Возвращаем кнопке исходный текст
@@ -138,55 +171,204 @@ function fetchFields() {
             fieldParamsMap.clear(); // Очищаем карту параметров
             fieldsWithData = []; // Очищаем список полей с данными
 
+            // Проверка на дубликаты названий полей
+            const fieldNameCount = {};
             data.forEach(field => {
+                const name = field.fieldName;
+                fieldNameCount[name] = (fieldNameCount[name] || 0) + 1;
+            });
+
+            // Создаем массив промисов для обработки каждого поля
+            const promises = data.map(field => {
                 // Сохраняем параметры поля в карту
                 if (field.extraParams) {
                     fieldParamsMap.set(field.id, field.extraParams);
                 }
 
-                // Проверяем, есть ли данные для поля
-                fetch(`/sensorData/field/${field.id}?page=0&size=1`)
-                    .then(response => response.json())
-                    .then(sensorData => {
-                        if (sensorData.length > 0) {
-                            fieldsWithData.push(field.id);
-                        }
+                // Проверяем, есть ли данные для поля и есть ли у поля датчики
+                return Promise.all([
+                    // Запрос данных датчиков для проверки наличия данных
+                    fetch(`/sensorData/field/${field.id}?page=0&size=1`)
+                        .then(response => response.json()),
+                    // Запрос датчиков поля
+                    fetch(`/sensors/field/${field.id}`)
+                        .then(response => response.json())
+                ])
+                .then(([sensorData, sensors]) => {
+                    // Проверяем наличие данных
+                    if (sensorData.length > 0) {
+                        fieldsWithData.push(field.id);
+                    }
 
-                        // Форматируем дополнительные параметры для отображения
-                        let extraParamsDisplay = '-';
-                        if (field.extraParams) {
-                            try {
-                                // Создаем читаемое представление параметров
-                                let paramsArray = [];
-                                for (const [key, value] of Object.entries(field.extraParams)) {
-                                    paramsArray.push(`${key}: ${value}`);
-                                }
-                                extraParamsDisplay = paramsArray.join(', ');
+                    // Проверяем наличие датчиков
+                    const hasSensors = sensors && sensors.length > 0;
 
-                                // Ограничиваем длину для отображения
-                                if (extraParamsDisplay.length > 50) {
-                                    extraParamsDisplay = extraParamsDisplay.substring(0, 47) + '...';
-                                }
-                            } catch (e) {
-                                console.error('Error formatting extra params:', e);
-                            }
-                        }
+                    // Форматируем дополнительные параметры для отображения
+                    let extraParamsDisplay;
+                    if (field.extraParams && Object.keys(field.extraParams).length > 0) {
+                        extraParamsDisplay = `
+                            <button class="btn btn-info btn-sm view-extra-params"
+                                onclick="viewFieldParams('${field.id}', '${field.fieldName}')">
+                                <i class="fa fa-list"></i> Показать
+                            </button>`;
+                    } else {
+                        extraParamsDisplay = '<span class="text-muted">Нет</span>';
+                    }
 
-                        table.row.add([
-                            field.fieldName,
-                            field.uniqueFieldIdentifier || '-',
-                            extraParamsDisplay,
-                            `<button class="btn btn-info btn-sm" onclick="viewFieldSensors('${field.id}', '${field.fieldName}')"><i class="fa fa-eye"></i> Датчики</button>`,
-                            `<button class="btn btn-info btn-sm" onclick="editField('${field.id}')">Редактировать</button>
-                            <button class="btn btn-danger btn-sm" onclick="confirmDeleteField('${field.id}')">Удалить</button>`
-                        ]).draw();
-                    });
+                    // Число датчиков для отображения
+                    const sensorCount = hasSensors ? sensors.length : 0;
+
+                    // Создаем кнопку просмотра датчиков с условием активности и отображением количества
+                    const viewSensorsButton = hasSensors ?
+                        `<button class="btn btn-info btn-sm" onclick="viewFieldSensors('${field.id}', '${field.fieldName}')">
+                            <i class="fa fa-eye"></i> Датчики (${sensorCount})
+                        </button>` :
+                        `<button class="btn btn-info btn-sm" disabled>
+                            <i class="fa fa-eye"></i> Нет датчиков
+                        </button>`;
+
+                    // Формируем отображаемое название поля
+                    // Если есть дубликаты, добавляем короткий ID
+                    let displayFieldName = field.fieldName;
+                    if (fieldNameCount[field.fieldName] > 1) {
+                        const shortId = field.id.substring(0, 8); // Первые 8 символов ID
+                        displayFieldName = `${field.fieldName} <small class="text-muted">(ID: ${shortId})</small>`;
+                    }
+
+                    return {
+                        field: field,
+                        displayFieldName: displayFieldName,
+                        extraParamsDisplay: extraParamsDisplay,
+                        viewSensorsButton: viewSensorsButton,
+                        sensorCount: sensorCount
+                    };
+                })
+                .catch(error => {
+                    console.error(`Error processing field ${field.id}:`, error);
+                    // В случае ошибки создаем объект с данными по умолчанию
+                    return {
+                        field: field,
+                        displayFieldName: field.fieldName,
+                        extraParamsDisplay: '<span class="text-muted">Ошибка загрузки</span>',
+                        viewSensorsButton: `<button class="btn btn-info btn-sm" onclick="viewFieldSensors('${field.id}', '${field.fieldName}')">
+                            <i class="fa fa-eye"></i> Датчики
+                        </button>`,
+                        sensorCount: 0
+                    };
+                });
             });
+
+            // Обрабатываем все промисы
+            Promise.all(promises)
+                .then(results => {
+                    // Сортируем результаты по имени поля для лучшей группировки
+                    results.sort((a, b) => {
+                        return a.field.fieldName.localeCompare(b.field.fieldName) ||
+                               a.field.id.localeCompare(b.field.id);
+                    });
+
+                    // Добавляем данные в таблицу
+                    results.forEach(result => {
+                        table.row.add([
+                            result.displayFieldName,
+                            // Используем короткий ID вместо uniqueFieldIdentifier
+                            result.field.id,//.substring(0, 12) + '...',
+                            result.extraParamsDisplay,
+                            result.viewSensorsButton,
+                            `<button class="btn btn-warning btn-sm" onclick="editField('${result.field.id}')"> <i class="fa fa-edit"></i>Редактировать</button>
+                            <button class="btn btn-danger btn-sm" onclick="confirmDeleteField('${result.field.id}')"> <i class="fa fa-trash"></i> Удалить</button>`
+                        ]).draw(false);
+                    });
+
+                    // Финальная перерисовка таблицы
+                    table.draw();
+                })
+                .catch(error => {
+                    console.error('Error processing all fields:', error);
+                });
         })
         .catch(error => console.error('Error fetching fields:', error));
 }
 
-// Функция для просмотра датчиков поля
+// Функция для просмотра параметров поля
+function viewFieldParams(fieldId, fieldName) {
+    // Обновляем заголовок модального окна с дополнительной информацией
+    const shortId = fieldId.substring(0, 8);
+    $('#field-params-name').html(`${fieldName} <small class="text-muted">(ID: ${shortId})</small>`);
+
+    // Находим tbody существующей таблицы
+    const tbody = $('#field-params-table').find('tbody');
+
+    // Отображаем индикатор загрузки
+    tbody.html(`
+        <tr>
+            <td colspan="2" class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="sr-only">Загрузка...</span>
+                </div>
+                <p>Загрузка параметров...</p>
+            </td>
+        </tr>`);
+
+    // Показываем модальное окно
+    $('#viewFieldParamsModal').modal('show');
+
+    // Загружаем данные поля
+    fetch(`/fields/${fieldId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Сетевая ошибка: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(field => {
+            console.log("Данные поля для просмотра параметров:", field);
+
+            // Очищаем содержимое tbody
+            tbody.empty();
+
+            // Если есть дополнительные параметры, добавляем их в таблицу
+            if (field.extraParams && Object.keys(field.extraParams).length > 0) {
+                for (const [key, value] of Object.entries(field.extraParams)) {
+                    // Преобразуем значение в строку для отображения
+                    let displayValue = value;
+                    if (typeof value === 'object' && value !== null) {
+                        displayValue = JSON.stringify(value);
+                    }
+
+                    tbody.append(`
+                        <tr>
+                            <td>${key}</td>
+                            <td>${displayValue}</td>
+                        </tr>`);
+                }
+            } else {
+                // Если параметров нет, отображаем сообщение
+                tbody.append(`
+                    <tr>
+                        <td colspan="2" class="text-center">
+                            У этого поля нет дополнительных параметров
+                        </td>
+                    </tr>`);
+            }
+
+            // Устанавливаем фокус на кнопку закрытия
+            setTimeout(() => {
+                $('#viewFieldParamsModal .btn-secondary').focus();
+            }, 300);
+        })
+        .catch(error => {
+            console.error('Error fetching field params:', error);
+            tbody.html(`
+                <tr>
+                    <td colspan="2" class="text-center text-danger">
+                        Ошибка при загрузке параметров: ${error.message}
+                    </td>
+                </tr>`);
+        });
+}
+
+// Модифицированная функция для просмотра датчиков поля
 function viewFieldSensors(fieldId, fieldName) {
     selectedFieldId = fieldId;
     $('#field-name-display').text(fieldName);
@@ -195,71 +377,81 @@ function viewFieldSensors(fieldId, fieldName) {
     $('#sensors-data-body').html('<tr><td colspan="5" class="text-center">Загрузка данных...</td></tr>');
     $('#no-sensors-message').hide();
 
-    // Получаем датчики для поля
-    fetch(`/sensors/field/${fieldId}`)
+    // Получаем сначала информацию о поле для отображения полной информации
+    fetch(`/fields/${fieldId}`)
         .then(response => response.json())
-        .then(sensors => {
-            if (sensors && sensors.length > 0) {
-                // Очищаем таблицу
-                $('#sensors-data-body').empty();
+        .then(field => {
+            // Обновляем заголовок модального окна с дополнительной информацией
+            const shortId = field.id.substring(0, 8);
+            $('#field-name-display').html(`${field.fieldName} <small class="text-muted">(ID: ${shortId})</small>`);
 
-                // Заполняем таблицу данными
-                sensors.forEach(sensor => {
-                    // Сохраняем копию параметров в атрибуте data-params
-                    const sensorName = sensor.sensorName || 'Датчик';
-                    const sensorId = sensor.id;
+            // Получаем датчики для поля
+            return fetch(`/sensors/field/${fieldId}`)
+                .then(response => response.json())
+                .then(sensors => {
+                    if (sensors && sensors.length > 0) {
+                        // Очищаем таблицу
+                        $('#sensors-data-body').empty();
 
-                    // Проверяем наличие дополнительных параметров
-                    const hasParams = sensor.extraParams && Object.keys(sensor.extraParams).length > 0;
+                        // Заполняем таблицу данными
+                        sensors.forEach(sensor => {
+                            // Сохраняем копию параметров в атрибуте data-params
+                            const sensorName = sensor.sensorName || 'Датчик';
+                            const sensorId = sensor.id;
 
-                    // Добавляем строку в таблицу
-                    $('#sensors-data-body').append(`
-                        <tr>
-                            <td>${sensorName}</td>
-                            <td>${sensor.uniqueSensorIdentifier || '-'}</td>
-                            <td>${sensor.unit || '-'}</td>
-                            <td>${sensor.accuracyClass || '-'}</td>
-                            <td>
+                            // Проверяем наличие дополнительных параметров
+                            const hasParams = sensor.extraParams &&
+                                            Object.keys(sensor.extraParams).length > 0;
+
+                            // Добавляем строку в таблицу
+                            $('#sensors-data-body').append(`
+                            <tr>
+                                <td>${sensorName}</td>
+                                <td>${sensor.id || '-'}</td>
+                                <td>${sensor.unit || '-'}</td>
+                                <td>${sensor.accuracyClass || '-'}</td>
+                                <td>
                                 <button class="btn btn-info btn-sm view-sensor-params"
-                                        data-sensor-id="${sensorId}"
-                                        data-sensor-name="${sensorName}"
-                                        ${!hasParams ? 'disabled' : ''}>
+                                    data-sensor-id="${sensorId}"
+                                    data-sensor-name="${sensorName}"
+                                    ${!hasParams ? 'disabled' : ''}>
                                     <i class="fa fa-list"></i> Доп. параметры
                                 </button>
-                            </td>
-                        </tr>
-                    `);
-                });
-
-                // Добавляем обработчик для кнопок просмотра параметров
-                $('.view-sensor-params').on('click', function() {
-                    const sensorId = $(this).data('sensor-id');
-                    const sensorName = $(this).data('sensor-name');
-
-                    // Загружаем данные датчика и его параметры
-                    fetch(`/sensors/${sensorId}`)
-                        .then(response => response.json())
-                        .then(sensor => {
-                            // Показываем параметры датчика
-                            viewSensorParams(sensorName, sensor.extraParams);
-                        })
-                        .catch(error => {
-                            console.error('Error fetching sensor details:', error);
-                            alert('Ошибка при загрузке параметров датчика');
+                                </td>
+                            </tr>
+                            `);
                         });
+
+                        // Добавляем обработчик для кнопок просмотра параметров
+                        $('.view-sensor-params').on('click', function() {
+                            const sensorId = $(this).data('sensor-id');
+                            const sensorName = $(this).data('sensor-name');
+
+                            // Загружаем данные датчика и его параметры
+                            fetch(`/sensors/${sensorId}`)
+                            .then(response => response.json())
+                            .then(sensor => {
+                                // Показываем параметры датчика
+                                viewSensorParams(sensorName, sensor.extraParams);
+                            })
+                            .catch(error => {
+                                console.error('Error fetching sensor details:', error);
+                                alert('Ошибка при загрузке параметров датчика');
+                            });
+                        });
+
+                        // Показываем таблицу
+                        $('#sensors-data-table').show();
+                        $('#no-sensors-message').hide();
+                    } else {
+                        // Если датчиков нет, показываем сообщение
+                        $('#sensors-data-table').hide();
+                        $('#no-sensors-message').show();
+                    }
+
+                    // Показываем модальное окно
+                    $('#viewSensorsModal').modal('show');
                 });
-
-                // Показываем таблицу
-                $('#sensors-data-table').show();
-                $('#no-sensors-message').hide();
-            } else {
-                // Если датчиков нет, показываем сообщение
-                $('#sensors-data-table').hide();
-                $('#no-sensors-message').show();
-            }
-
-            // Показываем модальное окно
-            $('#viewSensorsModal').modal('show');
         })
         .catch(error => {
             console.error('Error fetching sensors:', error);
@@ -320,39 +512,37 @@ function addField() {
         return;
     }
 
-    fetch('/fields')
-        .then(response => response.json())
-        .then(fields => {
-            if (fields.some(field => field.fieldName === fieldName)) {
-                alert('Поле с таким названием уже существует');
-                throw new Error('Поле с таким названием уже существует');
-            }
+    // Получаем сохраненные параметры для нового поля
+    const extraParams = fieldParamsMap.get('new') || {};
 
-            // Получаем сохраненные параметры для нового поля
-            const extraParams = fieldParamsMap.get('new') || {};
-
-            // Создаем новое поле
-            return fetch('/fields', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    fieldName: fieldName,
-                    uniqueFieldIdentifier: generateUUID(),
-                    extraParams: Object.keys(extraParams).length > 0 ? extraParams : null,
-                    sensors: [] // Пустой массив датчиков
-                })
-            });
+    // Создаем новое поле - убираем uniqueFieldIdentifier
+    fetch('/fields', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            fieldName: fieldName,
+            extraParams: Object.keys(extraParams).length > 0 ? extraParams : null,
+            sensors: [] // Пустой массив датчиков
         })
-        .then(response => response.json())
-        .then(data => {
-            console.log('Field added:', data);
-            fetchFields();
-            resetForm();
-            fieldParamsMap.delete('new'); // Удаляем временные параметры
-        })
-        .catch(error => console.error('Error adding field:', error));
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Field added:', data);
+        fetchFields();
+        resetForm();
+        fieldParamsMap.delete('new'); // Удаляем временные параметры
+    })
+    .catch(error => {
+        console.error('Error adding field:', error);
+        alert(`Ошибка при добавлении поля: ${error.message}`);
+    });
 }
 
 function resetForm() {
@@ -368,20 +558,19 @@ function editField(fieldId) {
         .then(response => response.json())
         .then(field => {
             document.getElementById('edit-field-name').value = field.fieldName;
-            document.getElementById('edit-field-identifier').value = field.uniqueFieldIdentifier || '';
+            document.getElementById('edit-field-identifier').value = field.id || '';
 
-            // Сохраняем параметры в карту, если их еще нет
-            if (field.extraParams && !fieldParamsMap.has(fieldId)) {
-                fieldParamsMap.set(fieldId, field.extraParams);
-            }
+            // Сохраняем оригинальные параметры из сервера
+            serverOriginalParams = field.extraParams ? JSON.parse(JSON.stringify(field.extraParams)) : {};
 
-            // Проверяем, есть ли данные для этого поля
-            if (fieldsWithData.includes(fieldId)) {
-                document.getElementById('edit-field-name').disabled = true;
+            // Всегда обновляем параметры в карте при открытии диалога редактирования
+            if (field.extraParams) {
+                fieldParamsMap.set(fieldId, JSON.parse(JSON.stringify(field.extraParams)));
             } else {
-                document.getElementById('edit-field-name').disabled = false;
+                fieldParamsMap.delete(fieldId);
             }
 
+            // Остальной код без изменений
             $('#editFieldModal').modal('show');
         })
         .catch(error => console.error('Error fetching field:', error));
@@ -397,7 +586,12 @@ function saveFieldChanges() {
 
     // Получаем текущие данные поля
     fetch(`/fields/${selectedFieldId}`)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(field => {
             // Получаем сохраненные параметры для поля
             const extraParams = fieldParamsMap.get(selectedFieldId) || {};
@@ -417,13 +611,21 @@ function saveFieldChanges() {
                 body: JSON.stringify(updatedField)
             });
         })
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
             console.log('Field updated:', data);
             $('#editFieldModal').modal('hide');
             fetchFields();
         })
-        .catch(error => console.error('Error updating field:', error));
+        .catch(error => {
+            console.error('Error updating field:', error);
+            alert(`Ошибка при обновлении поля: ${error.message}`);
+        });
 }
 
 function confirmDeleteField(fieldId) {
@@ -475,33 +677,17 @@ function showAddParamsModal(mode) {
     // Копируем параметры в рабочую копию
     workingParams = {...currentParams};
 
+    // Сохраняем оригинальное состояние для восстановления при отмене
+    originalParams = {...currentParams};
+
     // Отображаем параметры
     renderExtraParamsList();
 
     // Очищаем поля ввода
     clearParamInputFields();
 
-    // Временно скрываем фон первого модального окна при открытии второго
-    if ($('.modal-backdrop').length > 0) {
-        // Находим последний бэкдроп и увеличиваем его z-index
-        const currentBackdrop = $('.modal-backdrop').last();
-        const newZIndex = parseInt(currentBackdrop.css('z-index')) + 10;
-
-        // Создаем новый бэкдроп для второго модального окна
-        $('body').append('<div class="modal-backdrop show temp-backdrop"></div>');
-        $('.temp-backdrop').css('z-index', newZIndex);
-    }
-
-    // Показываем модальное окно
-    $('#extraParamsModal').modal({
-        backdrop: false, // Отключаем автоматический бэкдроп
-        keyboard: true   // Разрешаем закрытие по Esc
-    });
-
-    // Устанавливаем более высокий z-index для второго модального окна
-    setTimeout(() => {
-        $('#extraParamsModal').css('z-index', 1060);
-    }, 10);
+    // Показываем модальное окно с обычным бэкдропом
+    $('#extraParamsModal').modal('show');
 }
 
 // Функция для добавления дополнительного параметра

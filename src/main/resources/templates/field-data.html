@@ -5,8 +5,9 @@
     <title>Система хранения и анализа данных с полей</title>
     <link rel="icon" href="/img/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" type="text/css" href="/css/style_field_data.css">
+    <link rel="stylesheet" type="text/css" href="/css/style_fields.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 </head>
 <body>
 <header>
@@ -24,8 +25,8 @@
         <table id="field-data-table" class="table table-bordered">
             <thead>
             <tr>
-                <th>ID датчика</th> <!-- Updated header -->
-                <th>Уникальный индекс</th>
+                <th>Название датчика</th>
+                <th>Уникальный идентификатор</th>
                 <th>Значение</th>
                 <th>Единицы измерения</th>
                 <th>Класс точности</th>
@@ -37,6 +38,7 @@
             <tbody></tbody>
         </table>
     </div>
+
     <!-- Modal для редактирования записи -->
     <div class="modal fade" id="editRecordModal" tabindex="-1" aria-labelledby="editRecordModalLabel" aria-hidden="true">
         <div class="modal-dialog">
@@ -46,12 +48,8 @@
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
-                        <label for="edit-sensor-name">ID датчика</label> <!-- Updated label -->
+                        <label for="edit-sensor-name">Название датчика</label>
                         <input type="text" id="edit-sensor-name" class="form-control" disabled>
-                    </div>
-                    <div class="form-group">
-                        <label for="edit-value">Значение</label>
-                        <input type="number" id="edit-value" class="form-control">
                     </div>
                     <div class="form-group">
                         <label for="edit-unit">Единицы измерения</label>
@@ -62,12 +60,18 @@
                         <input type="text" id="edit-accuracy-class" class="form-control">
                     </div>
                     <div class="form-group">
-                        <label for="edit-extra-params">Дополнительные параметры (JSON)</label>
-                        <textarea id="edit-extra-params" class="form-control" rows="3"></textarea>
+                        <label for="edit-value">Значение</label>
+                        <input type="number" id="edit-value" class="form-control">
                     </div>
                     <div class="form-group">
                         <label for="edit-timestamp">Дата и время</label>
                         <input type="datetime-local" id="edit-timestamp" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label>Доп. параметры записи</label>
+                        <button type="button" class="btn btn-primary" id="edit-params-btn">
+                            <i class="fa fa-edit"></i> Редактировать доп. параметры
+                        </button>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -77,12 +81,16 @@
             </div>
         </div>
     </div>
+
     <!-- Modal для подтверждения удаления -->
     <div class="modal fade" id="deleteRecordModal" tabindex="-1" aria-labelledby="deleteRecordModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="deleteRecordModalLabel">Удалить запись</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
                 </div>
                 <div class="modal-body">
                     Вы уверены, что хотите удалить эту запись?
@@ -90,6 +98,63 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Отмена</button>
                     <button type="button" class="btn btn-danger" onclick="deleteRecord()">Удалить</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal для редактирования дополнительных параметров -->
+    <div class="modal fade" id="editParamsModal" tabindex="-1" aria-labelledby="editParamsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editParamsModalLabel">Доп. параметры записи: <span id="edit-params-record-name"></span></h5>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label>Текущие параметры:</label>
+                        <div id="extra-params-list" class="extra-params-container"></div>
+                    </div>
+                    <div class="form-group">
+                        <div class="extra-param-row">
+                            <input type="text" id="param-key" class="form-control" placeholder="Название параметра">
+                            <input type="text" id="param-value" class="form-control" placeholder="Значение параметра">
+                            <button type="button" class="btn btn-success" id="add-param-btn">+</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="close-extra-params" data-dismiss="modal">Закрыть</button>
+                    <button type="button" class="btn btn-primary" id="save-extra-params">Сохранить параметры</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal для просмотра дополнительных параметров -->
+    <div class="modal fade" id="viewParamsModal" tabindex="-1" aria-labelledby="viewParamsModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="viewParamsModalLabel">
+                        Доп. параметры записи: <span id="params-record-name"></span>
+                    </h5>
+                </div>
+                <div class="modal-body">
+                    <table id="params-table" class="table table-striped table-bordered">
+                        <thead>
+                        <tr>
+                            <th>Параметр</th>
+                            <th>Значение</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <!-- Здесь будут строки параметров -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Закрыть</button>
                 </div>
             </div>
         </div>
