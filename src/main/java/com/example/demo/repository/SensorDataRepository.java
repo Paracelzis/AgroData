@@ -23,4 +23,10 @@ public interface SensorDataRepository extends MongoRepository<SensorData, String
 
     @Query("{ 'field_id': ?0 }")
     Page<SensorData> findByFieldIdOrderByTimestampDesc(String fieldId, Pageable pageable);
+
+    @Query("{ 'field_id': ?0, $or: [ { 'sensorName': { $regex: ?1, $options: 'i' } }, { 'value': { $regex: ?1, $options: 'i' } } ] }")
+    Page<SensorData> findByFieldIdAndSearchText(String fieldId, String searchText, Pageable pageable);
+
+    @Query("{ 'field_id': ?0 }")
+    long countByFieldId(String fieldId);
 }

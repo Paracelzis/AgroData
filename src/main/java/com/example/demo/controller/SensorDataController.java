@@ -4,6 +4,7 @@ import com.example.demo.model.SensorData;
 import com.example.demo.service.SensorDataService;
 import com.example.demo.service.SensorService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -12,7 +13,9 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.text.ParseException;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @RestController
@@ -37,12 +40,37 @@ public class SensorDataController {
         return savedData;
     }
 
+    @GetMapping("/field/{fieldId}/count")
+    public ResponseEntity<Long> getFieldSensorDataCount(@PathVariable String fieldId) {
+        try {
+            long count = sensorDataService.countByFieldId(fieldId);
+            return ResponseEntity.ok(count);
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
     @GetMapping("/field/{fieldId}")
-    public List<SensorData> getFieldSensorData(@PathVariable String fieldId,
-                                               @RequestParam int page,
-                                               @RequestParam int size) {
-        Pageable pageable = PageRequest.of(page, size);
-        return sensorDataService.findByFieldIdOrderByTimestampDesc(fieldId, pageable).getContent();
+    public ResponseEntity<Map<String, Object>> getFieldSensorData(
+            @PathVariable String fieldId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+
+        try {
+            Pageable pageable = PageRequest.of(page, size);
+            Page<SensorData> pageData = sensorDataService.findByFieldIdOrderByTimestampDesc(fieldId, pageable);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("content", pageData.getContent());
+            response.put("totalPages", pageData.getTotalPages());
+            response.put("totalElements", pageData.getTotalElements());
+            response.put("currentPage", pageData.getNumber());
+
+            return ResponseEntity.ok(response);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     @GetMapping("/{id}")
@@ -98,6 +126,32 @@ public class SensorDataController {
             @PathVariable String fieldId,
             @PathVariable String sensorId) {
         return sensorDataService.getAllTimeSensorData(fieldId, sensorId);
+    }
+
+    @GetMapping("/api/sensorData/paginated")
+    public ResponseEntity<Page<SensorData>> getPaginatedSensorData(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam String fieldId,
+            @RequestParam(required = false) String search) {
+
+        try {
+            Pageable pageable = PageRequest.of(page, size);
+            Page<SensorData> result;
+
+            if (search != null && !search.trim().isEmpty()) {
+                // Если есть поисковый запрос, использовать метод поиска
+                result = sensorDataService.findByFieldIdAndSearchText(fieldId, search, pageable);
+            } else {
+                // Иначе использовать обычный метод получения данных по полю
+                result = sensorDataService.findByFieldIdOrderByTimestampDesc(fieldId, pageable);
+            }
+
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     // Класс для сообщения об удалении

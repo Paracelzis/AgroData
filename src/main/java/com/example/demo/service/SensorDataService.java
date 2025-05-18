@@ -68,4 +68,14 @@ public class SensorDataService {
     public Page<SensorData> findByFieldIdOrderByTimestampDesc(String fieldId, Pageable pageable) {
         return sensorDataRepository.findByFieldIdOrderByTimestampDesc(fieldId, pageable);
     }
+
+    public Page<SensorData> findByFieldIdAndSearchText(String fieldId, String searchText, Pageable pageable) {
+        // Реализация зависит от вашей базы данных
+        // Для MongoDB можно использовать Criteria API
+        return sensorDataRepository.findByFieldIdAndSearchText(fieldId, searchText, pageable);
+    }
+
+    public long countByFieldId(String fieldId) {
+        return sensorDataRepository.countByFieldId(fieldId);
+    }
 }

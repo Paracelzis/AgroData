@@ -5,9 +5,15 @@
     <title>Система хранения и анализа данных с полей</title>
     <link rel="icon" href="/img/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" type="text/css" href="/css/style_fields.css">
+    <link rel="stylesheet" type="text/css" href="/css/style_field_data.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <style>
+        /* Скрываем встроенную пагинацию DataTables */
+        .dataTables_paginate {
+            display: none !important;
+        }
+    </style>
 </head>
 <body>
 <header>
@@ -19,7 +25,6 @@
     <div class="form-container">
         <label for="field-select">Выберите поле:</label>
         <select id="field-select" class="form-control"></select>
-        <button class="btn btn-primary mt-2" onclick="fetchFieldData()">Отобразить</button>
     </div>
     <div class="table-container">
         <table id="field-data-table" class="table table-bordered">
@@ -137,7 +142,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="viewParamsModalLabel">
-                        Доп. параметры записи: <span id="params-record-name"></span>
+                        Доп. параметры записи с датчика: <span id="params-record-name"></span>
                     </h5>
                 </div>
                 <div class="modal-body">

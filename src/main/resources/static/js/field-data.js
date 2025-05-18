@@ -1,4 +1,7 @@
 let currentPage = 0;
+let pageSize = 10; // По умолчанию 10 записей на странице
+let totalPages = 0;
+let totalElements = 0;
 let table;
 let selectedRecordId = null;
 let selectedFieldId = null;
@@ -101,8 +104,20 @@ $(document).ready(function() {
         }, 100);
     });
 
+    // Добавляем обработчик изменения выбранного поля
+    $('#field-select').on('change', function() {
+        fetchFieldData();
+    });
+
     initDataTable();
     connectWebSocket(); // fetchFields будет вызван после успешного подключения
+
+    // Добавляем обработчик для изменения количества записей на странице
+    $('#field-data-table_length select').on('change', function() {
+        pageSize = parseInt($(this).val());
+        currentPage = 0; // Сбрасываем на первую страницу при изменении размера
+        fetchFieldData();
+    });
 });
 
 // Функция для сброса изменений параметров к исходным
@@ -121,8 +136,13 @@ function initDataTable() {
     table = $('#field-data-table').DataTable({
         paging: true,
         pageLength: 10,
+        lengthMenu: [10, 15, 50, 100],
         searching: true,
         ordering: true,
+        processing: true,
+        // Отключаем встроенную пагинацию DataTables - мы будем управлять ей вручную
+        serverSide: false,
+        ajax: null,
         language: {
             processing: "Подождите...",
             search: "Поиск:",
@@ -164,18 +184,109 @@ function initDataTable() {
             { data: 'actions', orderable: false }
         ],
         order: [[6, 'desc']], // Сортировка по дате (индекс 6)
-        drawCallback: function() {
-            // Удаляем пустые строки после отрисовки таблицы
-            const api = this.api();
-            api.rows().every(function() {
-                const data = this.data();
-                if (!data || Object.keys(data).length === 0 ||
-                    (data.sensorId === '-' && data.uniqueIndex === '-' && data.value === '-')) {
-                    this.remove();
+        drawCallback: function(settings) {
+            // Отложенная инициализация обработчика изменения количества записей
+            setTimeout(() => {
+                if (!window.pageSizeListenerInitialized) {
+                    $('#field-data-table_length select').on('change', function() {
+                        pageSize = parseInt($(this).val());
+                        currentPage = 0; // Сбрасываем на первую страницу при изменении размера
+                        fetchFieldData();
+                    });
+                    window.pageSizeListenerInitialized = true;
                 }
-            });
+            }, 100);
         }
     });
+
+    // Добавляем контейнер для нашей кастомной пагинации под таблицей
+    $('.table-container').append('<div id="custom-pagination" class="custom-pagination"></div>');
+}
+
+function updatePagination() {
+    const paginationContainer = $('#custom-pagination');
+    paginationContainer.empty();
+
+    if (totalPages <= 1) {
+        return; // Не показываем пагинацию, если всего одна страница
+    }
+
+    // Создаем кнопки пагинации
+    const paginationEl = $('<ul class="pagination justify-content-center"></ul>');
+
+    // Кнопка "Предыдущая"
+    const prevButton = $(`<li class="page-item ${currentPage === 0 ? 'disabled' : ''}">
+                          <a class="page-link" href="#" aria-label="Previous" data-page="${currentPage - 1}">
+                            <span aria-hidden="true">&laquo;</span>
+                          </a>
+                        </li>`);
+    paginationEl.append(prevButton);
+
+    // Определяем, какие страницы показывать
+    // Всегда показываем первую, последнюю и 3 страницы вокруг текущей
+    const pagesToShow = new Set();
+    pagesToShow.add(0); // Первая страница
+    pagesToShow.add(totalPages - 1); // Последняя страница
+
+    // 3 страницы вокруг текущей
+    for (let i = Math.max(0, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+        pagesToShow.add(i);
+    }
+
+    // Преобразуем в массив и сортируем
+    const pagesArray = Array.from(pagesToShow).sort((a, b) => a - b);
+
+    // Добавляем кнопки страниц с разделителями
+    let prevPage = -1;
+    for (const page of pagesArray) {
+        // Добавляем разделитель, если есть пропуск в нумерации
+        if (prevPage !== -1 && page > prevPage + 1) {
+            paginationEl.append('<li class="page-item disabled"><a class="page-link">...</a></li>');
+        }
+
+        // Добавляем кнопку страницы
+        const pageButton = $(`<li class="page-item ${page === currentPage ? 'active' : ''}">
+                              <a class="page-link" href="#" data-page="${page}">${page + 1}</a>
+                            </li>`);
+        paginationEl.append(pageButton);
+
+        prevPage = page;
+    }
+
+    // Кнопка "Следующая"
+    const nextButton = $(`<li class="page-item ${currentPage >= totalPages - 1 ? 'disabled' : ''}">
+                          <a class="page-link" href="#" aria-label="Next" data-page="${currentPage + 1}">
+                            <span aria-hidden="true">&raquo;</span>
+                          </a>
+                        </li>`);
+    paginationEl.append(nextButton);
+
+    // Добавляем пагинацию в контейнер
+    paginationContainer.append(paginationEl);
+
+    // Добавляем обработчики для кнопок
+    $('.page-link').on('click', function(e) {
+        e.preventDefault();
+
+        // Проверяем, не отключена ли кнопка
+        if ($(this).parent().hasClass('disabled')) {
+            return;
+        }
+
+        const page = parseInt($(this).data('page'));
+        if (!isNaN(page) && page >= 0 && page < totalPages) {
+            currentPage = page;
+            fetchFieldData();
+        }
+    });
+
+    // Добавляем информацию о пагинации
+    paginationContainer.append(`
+        <div class="mt-2 text-center">
+            Показаны записи ${Math.min(totalElements, currentPage * pageSize + 1)} -
+            ${Math.min(totalElements, (currentPage + 1) * pageSize)} из ${totalElements}
+        </div>
+    `);
 }
 
 function connectWebSocket() {
@@ -219,6 +330,12 @@ function fetchFields() {
                 fieldNameCount[name] = (fieldNameCount[name] || 0) + 1;
             });
 
+            // Добавляем опцию "Выберите поле"
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.textContent = '-- Выберите поле --';
+            fieldSelect.appendChild(defaultOption);
+
             data.forEach(field => {
                 const option = document.createElement('option');
                 option.value = field.id;
@@ -230,10 +347,7 @@ function fetchFields() {
                 fieldSelect.appendChild(option);
             });
 
-            if (data.length > 0) {
-                selectedFieldId = fieldSelect.value;
-                fetchFieldData();
-            }
+            // Не загружаем данные автоматически, ждем выбора поля пользователем
         })
         .catch(error => {
             console.error('Error fetching fields:', error);
@@ -244,112 +358,133 @@ function fetchFields() {
 
 function fetchFieldData() {
     selectedFieldId = document.getElementById('field-select').value;
-    fetch(`/sensorData/field/${selectedFieldId}?page=${currentPage}&size=100`)
-        .then(response => response.json())
-        .then(data => {
-            console.log('Received data:', data);
+
+    // Если поле не выбрано, очищаем таблицу и выходим
+    if (!selectedFieldId) {
+        table.clear().draw();
+        $('#custom-pagination').empty();
+        return;
+    }
+
+    // Показываем индикатор загрузки
+    table.clear().draw();
+    $('#custom-pagination').html('<div class="text-center"><div class="spinner-border" role="status"><span class="sr-only">Загрузка...</span></div></div>');
+
+    // Загружаем данные для текущей страницы вместе с информацией о пагинации
+    fetch(`/sensorData/field/${selectedFieldId}?page=${currentPage}&size=${pageSize}`)
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Ошибка HTTP: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(responseData => {
+        console.log('Received data:', responseData);
+
+        // Обрабатываем возвращенную информацию о пагинации
+        if (responseData.totalPages !== undefined) {
+            totalPages = responseData.totalPages;
+        }
+        if (responseData.totalElements !== undefined) {
+            totalElements = responseData.totalElements;
+        }
+
+        // Получаем данные из ответа
+        const records = responseData.content || [];
+
+        // Если данных нет, обновляем пагинацию и завершаем обработку
+        if (records.length === 0) {
+            table.clear().draw();
+            updatePagination();
+            return;
+        }
+
+        // Кэшируем датчики для улучшения производительности
+        const sensorCache = new Map();
+
+        // Получаем все датчики для поля
+        return fetch(`/sensors/field/${selectedFieldId}`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`Ошибка при загрузке датчиков: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(sensors => {
+            // Заполняем кэш датчиков
+            sensors.forEach(sensor => {
+                sensorCache.set(sensor.id, sensor);
+            });
+
+            // Очищаем таблицу
             table.clear();
 
-            // Кэшируем датчики для улучшения производительности
-            const sensorCache = new Map();
+            // Обрабатываем данные с датчиков
+            records.forEach(record => {
+                if (!record.sensor_id) {
+                    console.warn('Missing sensor_id in record:', record);
+                    return;
+                }
 
-            // Создаем счетчик для обработки асинхронных запросов
-            let pendingRequests = 1; // Начинаем с 1 для основного запроса
+                // Получаем данные датчика из кэша
+                const sensor = sensorCache.get(record.sensor_id);
+                if (!sensor) {
+                    console.warn(`Sensor with ID ${record.sensor_id} not found`);
+                    return;
+                }
 
-            // Получаем все датчики для поля
-            fetch(`/sensors/field/${selectedFieldId}`)
-                .then(response => response.json())
-                .then(sensors => {
-                    // Заполняем кэш датчиков
-                    sensors.forEach(sensor => {
-                        sensorCache.set(sensor.id, sensor);
-                    });
+                const formattedDate = formatDate(record.timestamp);
+                const accuracyClass = sensor.accuracyClass || '-';
 
-                    // Обрабатываем данные с датчиков
-                    if (data.length === 0) {
-                        table.draw();
-                        return;
-                    }
+                // Проверяем наличие дополнительных параметров
+                const hasExtraParams = record.extraParams && Object.keys(record.extraParams).length > 0;
+                const extraParamsStr = JSON.stringify(record.extraParams || {}).replace(/\"/g, '&quot;');
+                const extraParamsDisplay = hasExtraParams ?
+                    `<button class="btn btn-info btn-sm view-params-btn" onclick="viewRecordParams('${record.id}', '${sensor.sensorName || sensor.id}', '${extraParamsStr}')">
+                        <i class="fa fa-list"></i> Показать
+                    </button>` :
+                    '<span class="text-muted">Нет</span>';
 
-                    data.forEach(record => {
-                        if (!record.sensor_id) {
-                            console.warn('Missing sensor_id in record:', record);
-                            return;
-                        }
+                const rowData = {
+                    id: record.id,
+                    sensorId: sensor.sensorName || sensor.id, // Отображаем имя датчика вместо ID
+                    uniqueIndex: record.id || '-',
+                    value: record.value !== undefined ? record.value : '-',
+                    unit: sensor.unit || '-',
+                    accuracyClass: accuracyClass,
+                    extraParams: extraParamsDisplay,
+                    timestamp: formattedDate,
+                    actions: `<button class="btn btn-warning btn-sm" onclick="showEditModal('${record.id}', '${sensor.id}', '${(sensor.sensorName || '').replace(/'/g, "\\'")}', ${record.value || 0}, '${record.timestamp || ''}', '${(sensor.unit || '').replace(/'/g, "\\'")}', '${(sensor.accuracyClass || '').replace(/'/g, "\\'")}', '${extraParamsStr.replace(/'/g, "\\'")}')">
+                        <i class="fa fa-edit"></i> Редактировать</button>
+                        <button class="btn btn-danger btn-sm" onclick="showDeleteModal('${record.id}')">
+                        <i class="fa fa-trash"></i> Удалить</button>`
+                };
 
-                        // Получаем данные датчика из кэша
-                        const sensor = sensorCache.get(record.sensor_id);
-                        if (!sensor) {
-                            console.warn(`Sensor with ID ${record.sensor_id} not found`);
-                            return;
-                        }
+                console.log('Adding row:', rowData);
+                table.row.add(rowData);
+            });
 
-                        const formattedDate = formatDate(record.timestamp);
-                        const accuracyClass = sensor.accuracyClass || '-';
+            // Перерисовываем таблицу
+            table.draw();
 
-                        // Проверяем наличие дополнительных параметров
-                        const hasExtraParams = record.extraParams && Object.keys(record.extraParams).length > 0;
-                        const extraParamsStr = JSON.stringify(record.extraParams || {}).replace(/"/g, '&quot;');
-                        const extraParamsDisplay = hasExtraParams ?
-                            `<button class="btn btn-info btn-sm view-params-btn"
-                            onclick="viewRecordParams('${record.id}', '${sensor.sensorName || sensor.id}', '${extraParamsStr}')">
-                            <i class="fa fa-list"></i> Показать
-                            </button>` :
-                            '<span class="text-muted">Нет</span>';
+            // Проверяем и удаляем пустые строки, если они есть
+            table.rows().every(function() {
+                const rowData = this.data();
+                if (!rowData || (typeof rowData === 'object' && Object.keys(rowData).length === 0)) {
+                    this.remove();
+                }
+            });
 
-                        const rowData = {
-                            id: record.id,
-                            sensorId: sensor.sensorName || sensor.id, // Отображаем имя датчика вместо ID
-                            uniqueIndex: record.id || '-',
-                            value: record.value !== undefined ? record.value : '-',
-                            unit: sensor.unit || '-',
-                            accuracyClass: accuracyClass,
-                            extraParams: extraParamsDisplay,
-                            timestamp: formattedDate,
-                            actions: `<button class="btn btn-warning btn-sm"
-                                onclick="showEditModal('${record.id}', '${sensor.id}',
-                                '${(sensor.sensorName || '').replace(/'/g, "\\'")}', ${record.value || 0},
-                                '${record.timestamp || ''}', '${(sensor.unit || '').replace(/'/g, "\\'")}',
-                                '${(sensor.accuracyClass || '').replace(/'/g, "\\'")}', '${extraParamsStr.replace(/'/g, "\\'")}')">
-                                <i class="fa fa-edit"></i> Редактировать</button>
-                                <button class="btn btn-danger btn-sm"
-                                onclick="showDeleteModal('${record.id}')">
-                                <i class="fa fa-trash"></i> Удалить</button>`
-                        };
-
-                        console.log('Adding row:', rowData);
-                        table.row.add(rowData);
-                    });
-
-                    // Уменьшаем счетчик и проверяем, все ли запросы выполнены
-                    pendingRequests--;
-                    if (pendingRequests === 0) {
-                        // Перерисовываем таблицу только один раз, когда все данные добавлены
-                        table.draw();
-
-                        // Проверяем и удаляем пустые строки, если они есть
-                        table.rows().every(function() {
-                            const rowData = this.data();
-                            if (!rowData || (typeof rowData === 'object' && Object.keys(rowData).length === 0)) {
-                                this.remove();
-                            }
-                        });
-
-                        table.draw(); // Перерисовываем ещё раз после удаления пустых строк
-                        subscribeToFieldUpdates(selectedFieldId);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching sensors:', error);
-                    pendingRequests--;
-                    if (pendingRequests === 0) {
-                        table.draw();
-                    }
-                });
-        })
-        .catch(error => {
-            console.error('Error fetching field data:', error);
+            // Обновляем пагинацию и устанавливаем WebSocket подписку
+            updatePagination();
+            subscribeToFieldUpdates(selectedFieldId);
         });
+    })
+    .catch(error => {
+        console.error('Error fetching field data:', error);
+        table.clear().draw();
+        $('#custom-pagination').html(`<div class="alert alert-danger">Ошибка при загрузке данных: ${error.message}</div>`);
+    });
 }
 
 function subscribeToFieldUpdates(fieldId) {
@@ -400,9 +535,8 @@ function subscribeToFieldUpdates(fieldId) {
                                 const hasExtraParams = data.extraParams && Object.keys(data.extraParams).length > 0;
                                 const extraParamsStr = data.extraParams ? JSON.stringify(data.extraParams) : '{}';
                                 const extraParamsDisplay = hasExtraParams ?
-                                    `<button class="btn btn-info btn-sm view-params-btn"
-                                    onclick="viewRecordParams('${data.id}', '${sensor.sensorName || sensor.id}', '${extraParamsStr.replace(/'/g, "\\'")}')">
-                                    <i class="fa fa-list"></i> Показать
+                                    `<button class="btn btn-info btn-sm view-params-btn" onclick="viewRecordParams('${data.id}', '${sensor.sensorName || sensor.id}', '${extraParamsStr.replace(/'/g, "\\'")}')">
+                                        <i class="fa fa-list"></i> Показать
                                     </button>` :
                                     '<span class="text-muted">Нет</span>';
 
@@ -415,14 +549,9 @@ function subscribeToFieldUpdates(fieldId) {
                                     accuracyClass: accuracyClass,
                                     extraParams: extraParamsDisplay,
                                     timestamp: formattedDate,
-                                    actions: `<button class="btn btn-warning btn-sm"
-                                        onclick="showEditModal('${data.id}', '${sensor.id}',
-                                        '${(sensor.sensorName || '').replace(/'/g, "\\'")}', ${data.value || 0},
-                                        '${data.timestamp || ''}', '${(sensor.unit || '').replace(/'/g, "\\'")}',
-                                        '${(sensor.accuracyClass || '').replace(/'/g, "\\'")}', '${extraParamsStr.replace(/'/g, "\\'")}')">
+                                    actions: `<button class="btn btn-warning btn-sm" onclick="showEditModal('${data.id}', '${sensor.id}', '${(sensor.sensorName || '').replace(/'/g, "\\'")}', ${data.value || 0}, '${data.timestamp || ''}', '${(sensor.unit || '').replace(/'/g, "\\'")}', '${(sensor.accuracyClass || '').replace(/'/g, "\\'")}', '${extraParamsStr.replace(/'/g, "\\'")}')">
                                         <i class="fa fa-edit"></i> Редактировать</button>
-                                        <button class="btn btn-danger btn-sm"
-                                        onclick="showDeleteModal('${data.id}')">
+                                        <button class="btn btn-danger btn-sm" onclick="showDeleteModal('${data.id}')">
                                         <i class="fa fa-trash"></i> Удалить</button>`
                                 };
 
@@ -524,7 +653,7 @@ function renderExtraParamsList() {
         paramBadge.className = 'param-badge';
 
         // Экранируем кавычки в ключе для безопасного использования в onclick
-        const escapedKey = key.replace(/(['"\\])/g, '\\$1');
+        const escapedKey = key.replace(/(['"\\\[\]])/g, '\\$1');
 
         paramBadge.innerHTML = `
             <span class="param-key">${key}:</span>
@@ -665,31 +794,31 @@ function viewRecordParams(id, sensorName, extraParamsStr) {
                 }
 
                 tbody.append(`
-                <tr>
-                    <td>${key}</td>
-                    <td>${displayValue}</td>
-                </tr>
+                    <tr>
+                        <td>${key}</td>
+                        <td>${displayValue}</td>
+                    </tr>
                 `);
             }
         } else {
             // Отображаем сообщение об отсутствии параметров
             tbody.append(`
-            <tr>
-                <td colspan="2" class="text-center">
-                У этой записи нет дополнительных параметров
-                </td>
-            </tr>
+                <tr>
+                    <td colspan="2" class="text-center">
+                        У этой записи нет дополнительных параметров
+                    </td>
+                </tr>
             `);
         }
     } catch (e) {
         console.error('Ошибка при парсинге параметров:', e, extraParamsStr);
         // В случае ошибки при парсинге JSON
         tbody.append(`
-        <tr>
-            <td colspan="2" class="text-center text-danger">
-            Ошибка при обработке дополнительных параметров: ${e.message}
-            </td>
-        </tr>
+            <tr>
+                <td colspan="2" class="text-center text-danger">
+                    Ошибка при обработке дополнительных параметров: ${e.message}
+                </td>
+            </tr>
         `);
     }
 
@@ -810,15 +939,15 @@ function showDeleteModal(id) {
 }
 
 function deleteRecord() {
-     fetch(`/sensorData/${selectedRecordId}`, {
-         method: 'DELETE'
-     })
-         .then(() => {
-             $('#deleteRecordModal').modal('hide');
-             fetchFieldData();
-         })
-         .catch(error => {
-             console.error('Error deleting record:', error);
-             alert('Ошибка при удалении записи: ' + error.message);
-         });
+    fetch(`/sensorData/${selectedRecordId}`, {
+        method: 'DELETE'
+    })
+    .then(() => {
+        $('#deleteRecordModal').modal('hide');
+        fetchFieldData();
+    })
+    .catch(error => {
+        console.error('Error deleting record:', error);
+        alert('Ошибка при удалении записи: ' + error.message);
+    });
 }

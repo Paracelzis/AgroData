@@ -89,6 +89,15 @@ $(document).ready(function() {
     $('#field-filter').on('change', function() {
         const fieldId = $(this).val();
         console.log("Выбрано поле:", fieldId);
+
+        // Проверяем, было ли выбрано реальное поле или дефолтное значение
+        if (fieldId === "") {
+            // Если выбрано дефолтное значение "-- Выберите поле --", очищаем таблицу
+            sensorsTable.clear().draw();
+            return;
+        }
+
+        // Иначе загружаем датчики для выбранного поля или все датчики
         loadSensors(fieldId);
     });
 
@@ -189,6 +198,9 @@ function loadFields() {
             const fieldFilter = $('#field-filter');
             fieldFilter.empty(); // Очищаем перед заполнением
 
+            // Добавляем опцию "Выберите поле"
+            fieldFilter.append(`<option value="">-- Выберите поле --</option>`);
+
             // Добавляем опцию "Все поля"
             fieldFilter.append(`<option value="all">Все поля</option>`);
 
@@ -197,8 +209,14 @@ function loadFields() {
                 fieldFilter.append(`<option value="${field.id}">${field.fieldName}</option>`);
             });
 
-            // Загружаем все датчики после инициализации полей
-            loadSensors('all');
+            // Устанавливаем выбранную опцию на "-- Выберите поле --"
+            fieldFilter.val("");
+
+            // Очищаем таблицу датчиков
+            sensorsTable.clear().draw();
+
+            // УБРАЛИ АВТОМАТИЧЕСКУЮ ЗАГРУЗКУ ВСЕХ ДАТЧИКОВ:
+            // loadSensors('all');
         })
         .catch(error => {
             console.error('Error loading fields:', error);
