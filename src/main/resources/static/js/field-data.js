@@ -863,74 +863,35 @@ function showEditModal(id, sensorId, sensorName, value, timestamp, unit, accurac
 
 function saveRecordChanges() {
     const value = document.getElementById('edit-value').value;
-
-    // Получаем timestamp в формате ISO для отправки на сервер
     const inputTimestamp = document.getElementById('edit-timestamp').value;
     const date = new Date(inputTimestamp);
     const timestamp = date.toISOString();
 
-    // Получаем детали датчика
-    fetch(`/sensors/${selectedSensorId}`)
-        .then(response => response.json())
-        .then(sensor => {
-            // Обновляем данные датчика, если изменились
-            const newAccuracyClass = document.getElementById('edit-accuracy-class').value.trim();
-            const newUnit = document.getElementById('edit-unit').value.trim();
-
-            let sensorUpdated = false;
-
-            if (newAccuracyClass !== (sensor.accuracyClass || '')) {
-                sensor.accuracyClass = newAccuracyClass || null;
-                sensorUpdated = true;
-            }
-
-            if (newUnit !== (sensor.unit || '')) {
-                sensor.unit = newUnit || null;
-                sensorUpdated = true;
-            }
-
-            // Если датчик изменен, обновляем его
-            const sensorPromise = sensorUpdated ?
-                fetch(`/sensors/${selectedSensorId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(sensor)
-                }) : Promise.resolve();
-
-            // Обновляем данные записи
-            sensorPromise.then(() => {
-                return fetch(`/sensorData/${selectedRecordId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        id: selectedRecordId,
-                        sensor_id: selectedSensorId,
-                        field_id: selectedFieldId,
-                        value: parseFloat(value),
-                        timestamp: timestamp,
-                        extraParams: Object.keys(editingParams).length > 0 ? editingParams : null
-                    })
-                });
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('Record updated:', data);
-                $('#editRecordModal').modal('hide');
-                fetchFieldData();
-            })
-            .catch(error => {
-                console.error('Error updating record data:', error);
-                alert('Ошибка при обновлении записи: ' + error.message);
-            });
+    // Обновляем только данные записи
+    fetch(`/sensorData/${selectedRecordId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            id: selectedRecordId,
+            sensor_id: selectedSensorId,
+            field_id: selectedFieldId,
+            value: parseFloat(value),
+            timestamp: timestamp,
+            extraParams: Object.keys(editingParams).length > 0 ? editingParams : null
         })
-        .catch(error => {
-            console.error('Error fetching sensor details:', error);
-            alert('Ошибка при получении данных датчика: ' + error.message);
-        });
+    })
+    .then(response => response.json())
+    .then(data => {
+        console.log('Record updated:', data);
+        $('#editRecordModal').modal('hide');
+        fetchFieldData();
+    })
+    .catch(error => {
+        console.error('Error updating record data:', error);
+        alert('Ошибка при обновлении записи: ' + error.message);
+    });
 }
 
 function showDeleteModal(id) {

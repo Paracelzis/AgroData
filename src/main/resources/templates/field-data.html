@@ -27,7 +27,7 @@
         <select id="field-select" class="form-control"></select>
     </div>
     <div class="table-container">
-        <table id="field-data-table" class="table table-bordered">
+        <table id="field-data-table" class="display">
             <thead>
             <tr>
                 <th>Название датчика</th>
@@ -62,7 +62,7 @@
                     </div>
                     <div class="form-group">
                         <label for="edit-accuracy-class">Класс точности</label>
-                        <input type="text" id="edit-accuracy-class" class="form-control">
+                        <input type="text" id="edit-accuracy-class" class="form-control" disabled>
                     </div>
                     <div class="form-group">
                         <label for="edit-value">Значение</label>
@@ -113,7 +113,7 @@
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="editParamsModalLabel">Доп. параметры записи: <span id="edit-params-record-name"></span></h5>
+                    <h5 class="modal-title" id="editParamsModalLabel">Доп. параметры записи от датчика: <span id="edit-params-record-name"></span></h5>
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
