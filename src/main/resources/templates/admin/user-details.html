@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Детали пользователя - Система хранения и анализа данных с полей</title>
+    <link rel="icon" href="/img/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" type="text/css" href="/css/style_fields.css">
+    <style>
+        .user-details-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .user-detail {
+            margin-bottom: 15px;
+        }
+
+        .user-detail-label {
+            font-weight: bold;
+        }
+
+        .role-badge {
+            font-size: 14px;
+            margin-right: 5px;
+            padding: 5px 10px;
+        }
+
+        .role-assigned {
+            background-color: #28a745;
+        }
+
+        .role-unassigned {
+            background-color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Система хранения и анализа данных с полей</h1>
+    <h2>Панель администратора - Детали пользователя</h2>
+</header>
+
+<div id="nav-placeholder"></div>
+
+<div class="container mt-4">
+    <div class="user-details-container">
+        <h3>Информация о пользователе: <span th:text="${user.username}"></span></h3>
+
+        <div class="card mt-4">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">Основная информация</h5>
+            </div>
+            <div class="card-body">
+                <div class="user-detail">
+                    <span class="user-detail-label">ID пользователя:</span>
+                    <span th:text="${user.id}"></span>
+                </div>
+                <div class="user-detail">
+                    <span class="user-detail-label">Имя пользователя:</span>
+                    <span th:text="${user.username}"></span>
+                </div>
+                <div class="user-detail">
+                    <span class="user-detail-label">Email:</span>
+                    <span th:text="${user.email}"></span>
+                </div>
+                <div class="user-detail">
+                    <span class="user-detail-label">Полное имя:</span>
+                    <span th:text="${user.fullName}"></span>
+                </div>
+                <div class="user-detail">
+                    <span class="user-detail-label">Статус:</span>
+                    <span th:if="${user.enabled}" class="text-success">
+                            <i class="fas fa-check-circle"></i> Активен
+                        </span>
+                    <span th:unless="${user.enabled}" class="text-danger">
+                            <i class="fas fa-times-circle"></i> Неактивен
+                        </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">Роли пользователя</h5>
+            </div>
+            <div class="card-body">
+                <p>Текущие роли:</p>
+                <div class="mb-3">
+                    <span th:if="${user.roles.isEmpty()}" class="text-muted">У пользователя нет ролей</span>
+                    <span th:each="role : ${user.roles}" class="badge badge-success role-badge" th:text="${role}"></span>
+                </div>
+
+                <hr>
+
+                <p>Управление ролями:</p>
+                <div class="d-flex flex-wrap">
+                    <form th:action="@{/admin/users/{id}/roles(id=${user.id})}" method="post" class="mr-2 mb-2">
+                        <input type="hidden" name="role" value="USER">
+                        <button type="submit" class="btn" th:classappend="${user.roles.contains('USER') ? 'btn-success' : 'btn-secondary'}">
+                            <i class="fas" th:classappend="${user.roles.contains('USER') ? 'fa-check' : 'fa-plus'}"></i>
+                            USER
+                        </button>
+                    </form>
+
+                    <form th:action="@{/admin/users/{id}/roles(id=${user.id})}" method="post" class="mr-2 mb-2">
+                        <input type="hidden" name="role" value="ADMIN">
+                        <button type="submit" class="btn" th:classappend="${user.roles.contains('ADMIN') ? 'btn-success' : 'btn-secondary'}">
+                            <i class="fas" th:classappend="${user.roles.contains('ADMIN') ? 'fa-check' : 'fa-plus'}"></i>
+                            ADMIN
+                        </button>
+                    </form>
+
+                    <form th:action="@{/admin/users/{id}/roles(id=${user.id})}" method="post" class="mr-2 mb-2">
+                        <input type="hidden" name="role" value="READ_ONLY">
+                        <button type="submit" class="btn" th:classappend="${user.roles.contains('READ_ONLY') ? 'btn-success' : 'btn-secondary'}">
+                            <i class="fas" th:classappend="${user.roles.contains('READ_ONLY') ? 'fa-check' : 'fa-plus'}"></i>
+                            READ_ONLY
+                        </button>
+                    </form>
+                </div>
+
+                <div class="mt-3 alert alert-info">
+                    <p><strong>Роли пользователей:</strong></p>
+                    <ul>
+                        <li><strong>ADMIN</strong> - полный доступ к системе, включая панель администратора</li>
+                        <li><strong>USER</strong> - доступ на просмотр и изменение данных</li>
+                        <li><strong>READ_ONLY</strong> - доступ только на просмотр данных</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header bg-dark text-white">
+                <h5 class="mb-0">Действия</h5>
+            </div>
+            <div class="card-body">
+                <form th:action="@{/admin/users/{id}/toggle-status(id=${user.id})}" method="post" class="d-inline">
+                    <button type="submit" class="btn" th:classappend="${user.enabled ? 'btn-warning' : 'btn-success'}">
+                        <i class="fas fa-power-off"></i>
+                        <span th:if="${user.enabled}">Деактивировать пользователя</span>
+                        <span th:unless="${user.enabled}">Активировать пользователя</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="mt-4 text-center">
+            <a href="/admin/users" class="btn btn-secondary mr-2">
+                <i class="fas fa-arrow-left"></i> Назад к списку пользователей
+            </a>
+            <a href="/fields-page" class="btn btn-primary">
+                <i class="fas fa-home"></i> На главную
+            </a>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.2/dist/umd/popper.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script>
+    $(function(){
+        $("#nav-placeholder").load("/nav.html", function() {
+            highlightActiveNavItem();
+        });
+    });
+
+    function highlightActiveNavItem() {
+        var url = window.location.href.split('#')[0];
+        var links = document.querySelectorAll('.nav-item a');
+        links.forEach(function(link) {
+            if (url.includes(link.getAttribute('href'))) {
+                link.classList.add('active');
+            } else {
+                link.classList.remove('active');
+            }
+        });
+    }
+</script>
+</body>
+</html>

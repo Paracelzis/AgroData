@@ -69,7 +69,31 @@ $(function(){
 });
 
 document.addEventListener('DOMContentLoaded', function() {
-    $('#fields-table').DataTable({
+    // Проверяем, может ли пользователь редактировать данные
+    const canEdit = canUserEdit();
+
+    // Определяем колонки в зависимости от прав пользователя
+    let columns;
+    if (canEdit) {
+        columns = [
+            { data: 'fieldName' },
+            { data: 'uniqueIdentifier' },
+            { data: 'extraParams' },
+            { data: 'sensors' },
+            { data: 'actions' }
+        ];
+    } else {
+        columns = [
+            { data: 'fieldName' },
+            { data: 'uniqueIdentifier' },
+            { data: 'extraParams' },
+            { data: 'sensors' }
+        ];
+    }
+
+    // Инициализация DataTables с динамическими колонками
+    var table = $('#fields-table').DataTable({
+        columns: columns,
         language: {
             "processing": "Подождите...",
             "search": "Поиск:",
@@ -235,12 +259,24 @@ function fetchFields() {
                         displayFieldName = `${field.fieldName} <small class="text-muted">(ID: ${shortId})</small>`;
                     }
 
+                    let actionsHtml = '';
+                    if (canUserEdit()) {
+                        actionsHtml = `
+                            <button class="btn btn-warning btn-sm" onclick="editField('${field.id}')">
+                                <i class="fa fa-edit"></i> Редактировать
+                            </button>
+                            <button class="btn btn-danger btn-sm" onclick="confirmDeleteField('${field.id}')">
+                                <i class="fa fa-trash"></i> Удалить
+                            </button>`;
+                    }
+
                     return {
                         field: field,
                         displayFieldName: displayFieldName,
                         extraParamsDisplay: extraParamsDisplay,
                         viewSensorsButton: viewSensorsButton,
-                        sensorCount: sensorCount
+                        sensorCount: sensorCount,
+                        actionsHtml: actionsHtml  // Добавьте это поле!
                     };
                 })
                 .catch(error => {
@@ -258,33 +294,28 @@ function fetchFields() {
                 });
             });
 
-            // Обрабатываем все промисы
+            // Обрабатываем все промисы и добавляем данные в таблицу
             Promise.all(promises)
                 .then(results => {
-                    // Сортируем результаты по имени поля для лучшей группировки
-                    results.sort((a, b) => {
-                        return a.field.fieldName.localeCompare(b.field.fieldName) ||
-                               a.field.id.localeCompare(b.field.id);
-                    });
-
-                    // Добавляем данные в таблицу
                     results.forEach(result => {
-                        table.row.add([
-                            result.displayFieldName,
-                            // Используем короткий ID вместо uniqueFieldIdentifier
-                            result.field.id,//.substring(0, 12) + '...',
-                            result.extraParamsDisplay,
-                            result.viewSensorsButton,
-                            `<button class="btn btn-warning btn-sm" onclick="editField('${result.field.id}')"> <i class="fa fa-edit"></i>Редактировать</button>
-                            <button class="btn btn-danger btn-sm" onclick="confirmDeleteField('${result.field.id}')"> <i class="fa fa-trash"></i> Удалить</button>`
-                        ]).draw(false);
+                        // Определяем данные для строки в зависимости от прав пользователя
+                        let rowData = {
+                            fieldName: result.displayFieldName,
+                            uniqueIdentifier: result.field.id,
+                            extraParams: result.extraParamsDisplay,
+                            sensors: result.viewSensorsButton
+                        };
+
+                        // Добавляем поле actions только если пользователь может редактировать
+                        if (canUserEdit()) {
+                            rowData.actions = result.actionsHtml;
+                        }
+
+                        // Добавляем строку в таблицу
+                        table.row.add(rowData).draw(false);
                     });
 
-                    // Финальная перерисовка таблицы
                     table.draw();
-                })
-                .catch(error => {
-                    console.error('Error processing all fields:', error);
                 });
         })
         .catch(error => console.error('Error fetching fields:', error));
@@ -505,6 +536,10 @@ function viewSensorParams(sensorName, params) {
 }
 
 function addField() {
+    if (!canUserEdit()) {
+        alert('У вас нет прав на добавление данных.');
+        return;
+    }
     const fieldName = document.getElementById('new-field-name').value.trim();
 
     if (!fieldName) {
@@ -552,6 +587,10 @@ function resetForm() {
 
 function editField(fieldId) {
     selectedFieldId = fieldId;
+        if (!canUserEdit()) {
+            alert('У вас нет прав на редактирование данных.');
+            return;
+        }
 
     // Получаем данные о поле
     fetch(`/fields/${fieldId}`)
@@ -633,22 +672,52 @@ function confirmDeleteField(fieldId) {
 
     if (fieldsWithData.includes(fieldId)) {
         alert('Нельзя удалить поле, у которого уже есть данные с датчиков');
-    } else {
-        $('#deleteFieldModal').modal('show');
+        return;
     }
+
+    // Проверяем, есть ли у поля датчики
+    fetch(`/sensors/field/${fieldId}`)
+        .then(response => response.json())
+        .then(sensors => {
+            if (sensors && sensors.length > 0) {
+                alert(`Нельзя удалить поле, к которому привязаны датчики (${sensors.length} шт.)`);
+                return;
+            }
+
+            // Если нет датчиков, показываем модальное окно подтверждения
+            $('#deleteFieldModal').modal('show');
+        })
+        .catch(error => {
+            console.error('Error checking sensors:', error);
+            alert('Ошибка при проверке датчиков. Пожалуйста, попробуйте снова.');
+        });
 }
 
 function deleteField() {
+    if (!canUserEdit()) {
+        alert('У вас нет прав на удаление данных.');
+        return;
+    }
+
     fetch(`/fields/${selectedFieldId}`, {
         method: 'DELETE'
     })
-        .then(() => {
-            console.log('Field deleted');
-            $('#deleteFieldModal').modal('hide');
-            fieldParamsMap.delete(selectedFieldId); // Удаляем параметры удаленного поля
-            fetchFields();
-        })
-        .catch(error => console.error('Error deleting field:', error));
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.error || 'Ошибка при удалении поля');
+            });
+        }
+
+        console.log('Field deleted');
+        $('#deleteFieldModal').modal('hide');
+        fieldParamsMap.delete(selectedFieldId); // Удаляем параметры удаленного поля
+        fetchFields();
+    })
+    .catch(error => {
+        console.error('Error deleting field:', error);
+        alert(error.message || 'Ошибка при удалении поля');
+    });
 }
 
 // Вспомогательная функция для генерации UUID
@@ -806,4 +875,9 @@ function renderExtraParamsList() {
         `;
         container.appendChild(paramBadge);
     }
+}
+
+function canUserEdit() {
+    return document.getElementById('user-can-edit') !== null &&
+           document.getElementById('user-can-edit').value === 'true';
 }

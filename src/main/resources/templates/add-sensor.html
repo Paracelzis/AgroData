@@ -98,7 +98,15 @@
 <main>
     <div id="nav-placeholder"></div>
     <!-- Для добавления новых данных -->
-    <div class="form-container mt-4">
+
+    <input type="hidden" id="user-can-edit" th:value="${canEdit}" />
+
+    <div class="alert alert-info" th:if="${!canEdit}">
+        <i class="fas fa-info-circle"></i> У вас недостаточно прав для добавления датчиков.
+        Пожалуйста, обратитесь к администратору для получения расширенных прав.
+    </div>
+
+    <div class="form-container" th:if="${canEdit}">
         <h3>Выбор поля:</h3>
         <div class="form-group">
             <label for="sensor-field-name">Выберите поле для добавления датчиков</label>

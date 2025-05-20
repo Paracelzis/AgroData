@@ -39,8 +39,36 @@ $(document).ready(function() {
         highlightActiveNavItem();
     });
 
+    // Проверяем, может ли пользователь редактировать данные
+    const canEdit = canUserEdit();
+
+    // Определяем колонки в зависимости от прав пользователя
+    let columnsConfig;
+
+    if (canEdit) {
+        columnsConfig = [
+            { data: 'sensorName' },
+            { data: 'sensorIdentifier' },
+            { data: 'fieldName' },
+            { data: 'unit' },
+            { data: 'accuracyClass' },
+            { data: 'extraParamsIndicator' },
+            { data: 'actions' }
+        ];
+    } else {
+        columnsConfig = [
+            { data: 'sensorName' },
+            { data: 'sensorIdentifier' },
+            { data: 'fieldName' },
+            { data: 'unit' },
+            { data: 'accuracyClass' },
+            { data: 'extraParamsIndicator' }
+        ];
+    }
+
     // Инициализация таблицы
     sensorsTable = $('#sensors-table').DataTable({
+        columns: columnsConfig,
         language: {
             "processing": "Подождите...",
             "search": "Поиск:",
@@ -59,15 +87,6 @@ $(document).ready(function() {
                 "last": "Последняя"
             }
         },
-        columns: [
-            { data: 'sensorName' },      // Название датчика
-            { data: 'sensorIdentifier' }, // Уникальный идентификатор (будем использовать короткий id)
-            { data: 'fieldName' },       // Поле
-            { data: 'unit' },            // Единицы измерения
-            { data: 'accuracyClass' },   // Класс точности
-            { data: 'extraParamsIndicator' }, // Доп. параметры
-            { data: 'actions' }          // Действия
-        ],
         drawCallback: function() {
             // Проверяем и удаляем пустые строки после отрисовки
             const api = this.api();
@@ -261,6 +280,9 @@ function loadSensors(fieldId) {
                 sensorNamesByField[key] = (sensorNamesByField[key] || 0) + 1;
             });
 
+            // Проверяем, может ли пользователь редактировать данные
+            const canEdit = canUserEdit();
+
             // Создаем массив промисов для загрузки информации о полях
             const promises = sensors.map(sensor => {
                 // Получаем название поля из кэша или делаем запрос
@@ -309,28 +331,36 @@ function loadSensors(fieldId) {
                         displaySensorName = `${sensor.sensorName} <small class="text-muted">(ID: ${shortId})</small>`;
                     }
 
-                    return {
+                    // Создаем объект с данными строки
+                    const rowData = {
                         id: sensor.id, // Сохраняем полный ID для внутренних действий
                         sensorName: displaySensorName,
-                        // Используем короткий ID для отображения в колонке "Уникальный идентификатор"
-                        sensorIdentifier: sensor.id, //.substring(0, 12) + '...',
+                        sensorIdentifier: sensor.id,
                         fieldName: field.fieldName,
                         unit: sensor.unit || '-',
                         accuracyClass: sensor.accuracyClass || '-',
                         field_id: sensor.field_id,
                         extraParams: sensor.extraParams || {},
-                        extraParamsIndicator: extraParamsIndicator,
-                        actions: `
-                        <button class="btn btn-info btn-sm"
+                        extraParamsIndicator: extraParamsIndicator
+                    };
+
+                    // Добавляем кнопки действий только если пользователь имеет права на редактирование
+                    if (canEdit) {
+                        rowData.actions = `
+                        <button class="btn btn-warning btn-sm"
                             onclick="editSensor('${sensor.id}')">
-                            Редактировать
+                            <i class="fa fa-edit"></i> Редактировать
                         </button>
                         <button class="btn btn-danger btn-sm"
                             onclick="showDeleteModal('${sensor.id}')">
-                            Удалить
+                            <i class="fa fa-trash"></i> Удалить
                         </button>
-                        `
-                    };
+                        `;
+                    } else {
+                        rowData.actions = ''; // Пустая строка для READ_ONLY пользователей
+                    }
+
+                    return rowData;
                 });
             });
 
@@ -767,34 +797,89 @@ function saveSensorChanges() {
 // Показать модальное окно для подтверждения удаления
 function showDeleteModal(sensorId) {
     selectedSensorId = sensorId;
-    $('#deleteSensorModal').modal('show');
+
+    // Получаем информацию о датчике для отображения в модальном окне
+    fetch(`/sensors/${sensorId}`)
+        .then(response => response.json())
+        .then(sensor => {
+            const sensorName = sensor.sensorName || 'Датчик';
+
+            // Получаем информацию о количестве записей датчика
+            fetch(`/sensorData/sensor/${sensorId}/count`)
+                .then(response => response.json())
+                .then(data => {
+                    const dataCount = data || 0;
+
+                    // Обновляем текст модального окна
+                    $('#delete-sensor-name').text(sensorName);
+
+                    if (dataCount > 0) {
+                        $('#delete-sensor-warning').html(`
+                            <div class="alert alert-warning">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                Внимание! При удалении этого датчика будут также удалены все его данные (${dataCount} записей).
+                            </div>
+                        `);
+                    } else {
+                        $('#delete-sensor-warning').html('');
+                    }
+
+                    // Показываем модальное окно
+                    $('#deleteSensorModal').modal('show');
+                })
+                .catch(error => {
+                    console.error('Error fetching sensor data count:', error);
+                    // Показываем модальное окно без информации о количестве данных
+                    $('#delete-sensor-name').text(sensorName);
+                    $('#delete-sensor-warning').html('');
+                    $('#deleteSensorModal').modal('show');
+                });
+        })
+        .catch(error => {
+            console.error('Error fetching sensor details:', error);
+            $('#deleteSensorModal').modal('show');
+        });
 }
 
-// Удаление датчика
 function deleteSensor() {
     if (!selectedSensorId) return;
 
     fetch(`/sensors/${selectedSensorId}`, {
         method: 'DELETE'
     })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`Ошибка при удалении датчика: ${response.status}`);
-            }
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Ошибка при удалении датчика: ${response.status}`);
+        }
 
-            console.log('Датчик успешно удален');
+        return response.json();
+    })
+    .then(data => {
+        console.log('Датчик успешно удален:', data);
 
-            // Скрываем модальное окно и обновляем список
-            $('#deleteSensorModal').modal('hide');
+        // Скрываем модальное окно
+        $('#deleteSensorModal').modal('hide');
 
-            // Получаем текущее значение фильтра полей
-            const currentFieldFilter = $('#field-filter').val();
-            loadSensors(currentFieldFilter);
+        // Показываем сообщение об успешном удалении
+        if (data.deletedDataCount > 0) {
+            alert(`Датчик успешно удален. Также удалено ${data.deletedDataCount} записей данных этого датчика.`);
+        } else {
+            alert('Датчик успешно удален.');
+        }
 
-            selectedSensorId = null;
-        })
-        .catch(error => {
-            console.error('Error deleting sensor:', error);
-            alert('Ошибка при удалении датчика: ' + error.message);
-        });
+        // Обновляем список датчиков
+        const currentFieldFilter = $('#field-filter').val();
+        loadSensors(currentFieldFilter);
+
+        selectedSensorId = null;
+    })
+    .catch(error => {
+        console.error('Error deleting sensor:', error);
+        alert('Ошибка при удалении датчика: ' + error.message);
+    });
+}
+
+function canUserEdit() {
+    return document.getElementById('user-can-edit') !== null &&
+           document.getElementById('user-can-edit').value === 'true';
 }

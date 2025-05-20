@@ -154,6 +154,17 @@ public class SensorDataController {
         }
     }
 
+    @GetMapping("/sensor/{sensorId}/count")
+    public ResponseEntity<Long> getSensorDataCount(@PathVariable String sensorId) {
+        try {
+            long count = sensorDataService.countBySensorId(sensorId);
+            return ResponseEntity.ok(count);
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(0L);
+        }
+    }
+
     // Класс для сообщения об удалении
     private static class DeleteMessage {
         private String type = "DELETE";

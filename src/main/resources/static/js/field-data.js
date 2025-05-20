@@ -133,6 +133,48 @@ $(function(){
 });
 
 function initDataTable() {
+    const canEdit = canUserEdit();
+
+    let columns;
+    if (canEdit) {
+        columns = [
+            { data: 'sensorId' }, // ID датчика
+            { data: 'uniqueIndex' }, // Уникальный индекс
+            { data: 'value' }, // Значение
+            { data: 'unit' }, // Единицы измерения
+            { data: 'accuracyClass', defaultContent: '-' }, // Класс точности
+            { data: 'extraParams', defaultContent: '-' }, // Доп. параметры
+            {
+                data: 'timestamp',
+                render: function(data, type, row) {
+                    if (type === 'sort') {
+                        return data.sort;
+                    }
+                    return data.display;
+                }
+            },
+            { data: 'actions', orderable: false }
+        ];
+    } else {
+        columns = [
+            { data: 'sensorId' }, // ID датчика
+            { data: 'uniqueIndex' }, // Уникальный индекс
+            { data: 'value' }, // Значение
+            { data: 'unit' }, // Единицы измерения
+            { data: 'accuracyClass', defaultContent: '-' }, // Класс точности
+            { data: 'extraParams', defaultContent: '-' }, // Доп. параметры
+            {
+                data: 'timestamp',
+                render: function(data, type, row) {
+                    if (type === 'sort') {
+                        return data.sort;
+                    }
+                    return data.display;
+                }
+            }
+        ];
+    }
+
     table = $('#field-data-table').DataTable({
         paging: true,
         pageLength: 10,
@@ -143,6 +185,7 @@ function initDataTable() {
         // Отключаем встроенную пагинацию DataTables - мы будем управлять ей вручную
         serverSide: false,
         ajax: null,
+        columns: columns,
         language: {
             processing: "Подождите...",
             search: "Поиск:",
@@ -165,24 +208,6 @@ function initDataTable() {
                 sortDescending: ": активировать для сортировки столбца по убыванию"
             }
         },
-        columns: [
-            { data: 'sensorId' }, // ID датчика
-            { data: 'uniqueIndex' }, // Уникальный индекс
-            { data: 'value' }, // Значение
-            { data: 'unit' }, // Единицы измерения
-            { data: 'accuracyClass', defaultContent: '-' }, // Класс точности
-            { data: 'extraParams', defaultContent: '-' }, // Доп. параметры
-            {
-                data: 'timestamp',
-                render: function(data, type, row) {
-                    if (type === 'sort') {
-                        return data.sort;
-                    }
-                    return data.display;
-                }
-            },
-            { data: 'actions', orderable: false }
-        ],
         order: [[6, 'desc']], // Сортировка по дате (индекс 6)
         drawCallback: function(settings) {
             // Отложенная инициализация обработчика изменения количества записей
@@ -419,18 +444,21 @@ function fetchFieldData() {
             // Очищаем таблицу
             table.clear();
 
-            // Обрабатываем данные с датчиков
-            records.forEach(record => {
+            // Проверяем, имеет ли пользователь права на редактирование
+            const canEdit = canUserEdit();
+
+            // Создаем массив обещаний для обработки каждой записи
+            const rowPromises = records.map(record => {
                 if (!record.sensor_id) {
                     console.warn('Missing sensor_id in record:', record);
-                    return;
+                    return Promise.resolve(null); // Пропускаем эту запись
                 }
 
                 // Получаем данные датчика из кэша
                 const sensor = sensorCache.get(record.sensor_id);
                 if (!sensor) {
                     console.warn(`Sensor with ID ${record.sensor_id} not found`);
-                    return;
+                    return Promise.resolve(null); // Пропускаем эту запись
                 }
 
                 const formattedDate = formatDate(record.timestamp);
@@ -445,39 +473,61 @@ function fetchFieldData() {
                     </button>` :
                     '<span class="text-muted">Нет</span>';
 
+                // Создаем базовую информацию о строке
                 const rowData = {
                     id: record.id,
-                    sensorId: sensor.sensorName || sensor.id, // Отображаем имя датчика вместо ID
+                    sensorId: sensor.sensorName || sensor.id,
                     uniqueIndex: record.id || '-',
                     value: record.value !== undefined ? record.value : '-',
                     unit: sensor.unit || '-',
                     accuracyClass: accuracyClass,
                     extraParams: extraParamsDisplay,
-                    timestamp: formattedDate,
-                    actions: `<button class="btn btn-warning btn-sm" onclick="showEditModal('${record.id}', '${sensor.id}', '${(sensor.sensorName || '').replace(/'/g, "\\'")}', ${record.value || 0}, '${record.timestamp || ''}', '${(sensor.unit || '').replace(/'/g, "\\'")}', '${(sensor.accuracyClass || '').replace(/'/g, "\\'")}', '${extraParamsStr.replace(/'/g, "\\'")}')">
-                        <i class="fa fa-edit"></i> Редактировать</button>
-                        <button class="btn btn-danger btn-sm" onclick="showDeleteModal('${record.id}')">
-                        <i class="fa fa-trash"></i> Удалить</button>`
+                    timestamp: formattedDate
                 };
 
-                console.log('Adding row:', rowData);
-                table.row.add(rowData);
-            });
-
-            // Перерисовываем таблицу
-            table.draw();
-
-            // Проверяем и удаляем пустые строки, если они есть
-            table.rows().every(function() {
-                const rowData = this.data();
-                if (!rowData || (typeof rowData === 'object' && Object.keys(rowData).length === 0)) {
-                    this.remove();
+                // Добавляем кнопки действий, только если пользователь имеет права
+                if (canEdit) {
+                    rowData.actions = `<button class="btn btn-warning btn-sm" onclick="showEditModal('${record.id}', '${sensor.id}', '${(sensor.sensorName || '').replace(/'/g, "\\'")}', ${record.value || 0}, '${record.timestamp || ''}', '${(sensor.unit || '').replace(/'/g, "\\'")}', '${(sensor.accuracyClass || '').replace(/'/g, "\\'")}', '${extraParamsStr.replace(/'/g, "\\'")}')">
+                        <i class="fa fa-edit"></i> Редактировать</button>
+                        <button class="btn btn-danger btn-sm" onclick="showDeleteModal('${record.id}')">
+                        <i class="fa fa-trash"></i> Удалить</button>`;
+                } else {
+                    rowData.actions = ''; // Пустая строка для пользователей только для чтения
                 }
+
+                return Promise.resolve(rowData);
             });
 
-            // Обновляем пагинацию и устанавливаем WebSocket подписку
-            updatePagination();
-            subscribeToFieldUpdates(selectedFieldId);
+            // Обрабатываем все обещания и добавляем данные в таблицу
+            return Promise.all(rowPromises)
+                .then(rowsData => {
+                    // Фильтруем null значения (пропущенные записи)
+                    const validRows = rowsData.filter(row => row !== null);
+
+                    console.log('Processed rows:', validRows.length);
+
+                    // Добавляем строки в таблицу
+                    validRows.forEach(rowData => {
+                        table.row.add(rowData);
+                    });
+
+                    // Перерисовываем таблицу
+                    table.draw();
+
+                    // Если пользователь не имеет прав на редактирование, скрываем колонку действий
+                    if (!canEdit && table.column(7) && table.column(7).visible) {
+                        // Убедимся, что колонка существует перед попыткой скрыть её
+                        try {
+                            table.column(7).visible(false);
+                        } catch (e) {
+                            console.warn('Could not hide actions column:', e);
+                        }
+                    }
+
+                    // Обновляем пагинацию и настраиваем WebSocket
+                    updatePagination();
+                    subscribeToFieldUpdates(selectedFieldId);
+                });
         });
     })
     .catch(error => {
@@ -911,4 +961,9 @@ function deleteRecord() {
         console.error('Error deleting record:', error);
         alert('Ошибка при удалении записи: ' + error.message);
     });
+}
+
+function canUserEdit() {
+    return document.getElementById('user-can-edit') !== null &&
+           document.getElementById('user-can-edit').value === 'true';
 }

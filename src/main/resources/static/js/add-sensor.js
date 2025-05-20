@@ -4,6 +4,7 @@ $(function(){
     $("#nav-placeholder").load("/nav.html", function() {
         highlightActiveNavItem();
     });
+
     fetchFields();
 
     // Обработчик для кнопки добавления нового датчика
@@ -37,6 +38,9 @@ $(function(){
 
 // Функция для получения списка полей
 function fetchFields() {
+    if (!canUserEdit()) {
+        return;
+    }
     fetch('/fields')
         .then(response => response.json())
         .then(data => {
@@ -359,4 +363,9 @@ function saveAllSensors() {
             console.error('Error adding sensors:', error);
             alert('Ошибка при добавлении датчиков: ' + error.message);
         });
+}
+
+function canUserEdit() {
+    return document.getElementById('user-can-edit') !== null &&
+           document.getElementById('user-can-edit').value === 'true';
 }

@@ -22,6 +22,9 @@
 </header>
 <main>
     <div id="nav-placeholder"></div>
+
+    <input type="hidden" id="user-can-edit" th:value="${canEdit}" />
+
     <div class="form-container">
         <label for="field-select">Выберите поле:</label>
         <select id="field-select" class="form-control"></select>
@@ -37,7 +40,7 @@
                 <th>Класс точности</th>
                 <th>Доп. параметры</th>
                 <th>Дата и время</th>
-                <th>Действия</th>
+                <th th:if="${canEdit}">Действия</th>
             </tr>
             </thead>
             <tbody></tbody>
@@ -93,9 +96,6 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="deleteRecordModalLabel">Удалить запись</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
                 </div>
                 <div class="modal-body">
                     Вы уверены, что хотите удалить эту запись?

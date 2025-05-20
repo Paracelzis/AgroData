@@ -1,14 +1,71 @@
 <nav>
     <div class="nav-item">
-        <a href="fields-page">Поля</a>
+        <a href="/fields-page">Поля</a>
     </div>
     <div class="nav-item">
-        <a href="sensors">Датчики</a>
+        <a href="/sensors">Датчики</a>
     </div>
     <div class="nav-item">
-        <a href="add-sensor">Добавление датчиков</a>
+        <a href="/add-sensor">Добавление датчиков</a>
     </div>
     <div class="nav-item">
-        <a href="field-data">Просмотр данных с датчиков</a>
+        <a href="/field-data">Просмотр данных с датчиков</a>
+    </div>
+    <div class="nav-item admin-section">
+        <a href="/admin/users" class="admin-link">
+            <i class="fas fa-user-shield"></i> Панель администратора
+        </a>
+    </div>
+    <div class="nav-item user-section">
+        <span class="username-display"></span>
+        <a href="/logout" class="logout-link">
+            <i class="fas fa-sign-out-alt"></i> Выход
+        </a>
     </div>
 </nav>
+
+<style>
+    /* Стили для блока пользователя */
+    .user-section {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+    }
+
+    .username-display {
+        color: #fff;
+        margin-right: 15px;
+        font-weight: bold;
+        border-right: 1px solid rgba(255, 255, 255, 0.3);
+        padding-right: 15px;
+    }
+
+    .logout-link {
+        color: #ff9999 !important;
+        text-decoration: none;
+    }
+
+    .logout-link:hover {
+        color: #ff6666 !important;
+    }
+
+    /* Стили для панели администратора */
+    .admin-section {
+        margin-left: auto;
+        margin-right: 15px;
+    }
+
+    .admin-link {
+        color: #ffd700 !important; /* Золотистый цвет для админской ссылки */
+        text-decoration: none;
+    }
+
+    .admin-link:hover {
+        color: #ffcc00 !important;
+    }
+
+    /* Изменение отступов при наличии обеих секций */
+    .user-section:not(:first-child) {
+        margin-left: 0;
+    }
+</style>

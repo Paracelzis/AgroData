@@ -5,7 +5,7 @@
     <title>Система хранения и анализа данных с полей</title>
     <link rel="icon" href="/img/favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <link rel="stylesheet" type="text/css" href="/css/style_fields.css">
+    <link rel="stylesheet" type="text/css" href="/css/style_field_data.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <style>
@@ -90,6 +90,8 @@
         </select>
     </div>
 
+    <input type="hidden" id="user-can-edit" th:value="${canEdit}" />
+
     <!-- Таблица датчиков -->
     <div class="table-container">
         <table id="sensors-table" class="display">
@@ -101,7 +103,7 @@
                 <th>Единицы измерения</th>
                 <th>Класс точности</th>
                 <th>Доп. параметры</th>
-                <th>Действия</th>
+                <th th:if="${canEdit}">Действия</th>
             </tr>
             </thead>
             <tbody></tbody>
@@ -156,10 +158,11 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="deleteSensorModalLabel">Удалить датчик</h5>
+                    <h5 class="modal-title" id="deleteSensorModalLabel">Удалить датчик: <span id="delete-sensor-name"></span></h5>
                 </div>
                 <div class="modal-body">
-                    Вы уверены, что хотите удалить этот датчик?
+                    <p>Вы уверены, что хотите удалить этот датчик?</p>
+                    <div id="delete-sensor-warning"></div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary btn-block" data-dismiss="modal">Отмена</button>

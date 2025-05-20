@@ -9,10 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
@@ -132,16 +129,22 @@ public class FieldController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteField(@PathVariable String id) {
+    public ResponseEntity<?> deleteField(@PathVariable String id) {
         return fieldService.findById(id)
                 .map(field -> {
-                    // Удаляем связанные датчики
+                    // Проверяем наличие датчиков
                     List<Sensor> sensors = sensorService.findByFieldId(id);
-                    sensors.forEach(sensor -> sensorService.deleteById(sensor.getId()));
+                    if (!sensors.isEmpty()) {
+                        // Возвращаем ошибку, если датчики существуют
+                        Map<String, Object> response = new HashMap<>();
+                        response.put("error", "Нельзя удалить поле, к которому привязаны датчики");
+                        response.put("sensorCount", sensors.size());
+                        return ResponseEntity.badRequest().body(response);
+                    }
 
-                    // Удаляем само поле
+                    // Если датчиков нет, удаляем поле
                     fieldService.deleteById(id);
-                    return ResponseEntity.ok().<Void>build();
+                    return ResponseEntity.ok().build();
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

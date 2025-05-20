@@ -3,6 +3,8 @@ package com.example.demo.service;
 import com.example.demo.model.SensorData;
 import com.example.demo.repository.SensorDataRepository;
 import com.example.demo.repository.SensorRepository;
+import org.eclipse.paho.client.mqttv3.logging.Logger;
+import org.eclipse.paho.client.mqttv3.logging.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,6 +16,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.logging.ErrorManager;
 
 @Service
 public class SensorDataService {
@@ -77,5 +80,25 @@ public class SensorDataService {
 
     public long countByFieldId(String fieldId) {
         return sensorDataRepository.countByFieldId(fieldId);
+    }
+
+    public long countBySensorId(String sensorId) {
+        try {
+            return sensorDataRepository.countBySensor_id(sensorId);
+        } catch (Exception e) {
+            e.printStackTrace();
+            // В случае ошибки возвращаем 0
+            return 0;
+        }
+    }
+
+    public void deleteBySensorId(String sensorId) {
+        try {
+            sensorDataRepository.deleteBySensor_id(sensorId);
+        } catch (Exception e) {
+            e.printStackTrace();
+            // Простой вывод в консоль
+            System.err.println("Error deleting sensor data for sensorId " + sensorId + ": " + e.getMessage());
+        }
     }
 }

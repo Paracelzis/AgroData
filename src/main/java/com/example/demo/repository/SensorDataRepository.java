@@ -29,4 +29,12 @@ public interface SensorDataRepository extends MongoRepository<SensorData, String
 
     @Query("{ 'field_id': ?0 }")
     long countByFieldId(String fieldId);
+
+    // Метод для подсчета записей по sensor_id с использованием @Query и правильным возвращаемым типом
+    @Query(value = "{ 'sensor_id': ?0 }", count = true)
+    long countBySensor_id(String sensorId);
+
+    // Метод для удаления записей по sensor_id с использованием @Query
+    @Query(value = "{ 'sensor_id': ?0 }", delete = true)
+    void deleteBySensor_id(String sensorId);
 }
